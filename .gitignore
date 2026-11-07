@@ -1,0 +1,10 @@
+data/
+bin/
+*.db
+*.db-wal
+*.db-shm
+*.log
+.env
+.env.*
+coverage.out
+.DS_Store

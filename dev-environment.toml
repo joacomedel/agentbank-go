@@ -1,0 +1,53 @@
+[project]
+name = "agentbank-go"
+default_policy = "local"
+
+[env]
+PATH = "/opt/go/bin:/usr/local/bin:/usr/bin:/bin"
+GOCACHE = "/root/.cache/go-build"
+GOMODCACHE = "/root/go/pkg/mod"
+GOTOOLCHAIN = "local"
+GOMAXPROCS = "2"
+CGO_ENABLED = "0"
+
+[limits]
+memory_max = "1G"
+cpu_quota = "200%"
+timeout = "300s"
+max_parallel = 1
+
+[tasks.fmt]
+kind = "format"
+weight = "light"
+run = "test -z \"$(gofmt -l .)\""
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
+[tasks.vet]
+kind = "lint"
+weight = "light"
+run = "go vet ./..."
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
+[tasks.test]
+kind = "test"
+weight = "medium"
+run = "go test -count=1 ./..."
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
+[tasks.build]
+kind = "build"
+weight = "medium"
+run = "mkdir -p bin && go build -trimpath -o bin/agentbank ./cmd/agentbank"
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
+[tasks.test-race]
+kind = "test"
+weight = "medium"
+run = "go test -race -count=1 ./..."
+providers = ["pc", "ci"]
+requires = { tools = ["go", "gcc"] }
+env = { CGO_ENABLED = "1" }
