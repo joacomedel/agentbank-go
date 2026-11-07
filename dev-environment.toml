@@ -1,6 +1,6 @@
 [project]
 name = "agentbank-go"
-default_policy = "local"
+default_policy = "auto"
 
 [env]
 PATH = "/opt/go/bin:/usr/local/bin:/usr/bin:/bin"

@@ -152,6 +152,11 @@ documentarlo en `docs/api.md` como diferencia.
 
 ## 10. Testing y calidad
 
+La política general es
+`/root/pipelineCompilacion/docs/testing-policy.md`; la matriz específica de
+este proyecto está en `TESTING.md`. Lo de abajo es un resumen y no puede ser
+más débil que la política general.
+
 - Cada endpoint: handler + service + SQL + migración + tests.
 - Tests de integración con SQLite temporal (`t.TempDir()`), sin Postgres.
 - `go test ./...`, `go vet ./...`, `gofmt -l .` deben pasar.

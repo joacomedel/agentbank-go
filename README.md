@@ -3,6 +3,10 @@
 Reescritura del backend de AgentBank en **Go + SQLite**, sin frontend, pensada
 para correr en el Moto G20 con bajo consumo.
 
+> Este repo es el **piloto del ecosistema de testing** (`devctl`). La política
+> general está en `/root/pipelineCompilacion/docs/testing-policy.md` y la matriz
+> del proyecto en `TESTING.md`.
+
 - API HTTP `/v1` con documentación para construir el frontend después.
 - Un solo binario, SQLite embebido, sin Docker/Postgres/Node.
 - Auditoría append-only con hash chain.
@@ -57,6 +61,7 @@ go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 ## Documentación
 
 - `AGENTS.md`: reglas del agente de reescritura.
+- `TESTING.md`: matriz de testing del proyecto.
 - `docs/rewrite-plan.md`: fases, alcance y criterios.
 - `docs/scope.md`: MVP vs deferred.
 - `docs/api.md`: contrato HTTP.
