@@ -9,18 +9,23 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/joacomedel/agentbank-go/internal/service"
 )
 
 type Options struct {
 	MaxBodyBytes int64
 	Version      string
 	CORSOrigins  []string
+	// Now permite inyectar reloj en tests. nil usa time.Now.
+	Now func() time.Time
 }
 
 type Server struct {
 	db             *sql.DB
 	log            *slog.Logger
 	opts           Options
+	svc            *service.Service
 	allowedOrigins map[string]struct{}
 }
 
@@ -39,6 +44,7 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 		db:             database,
 		log:            logger,
 		opts:           opts,
+		svc:            service.New(database, opts.Now),
 		allowedOrigins: make(map[string]struct{}, len(opts.CORSOrigins)),
 	}
 	for _, origin := range opts.CORSOrigins {
@@ -48,6 +54,21 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /v1/meta", s.meta)
+
+	mux.Handle("GET /v1/me", s.authenticated(s.handleMe))
+	mux.Handle("GET /v1/projects", s.authenticated(s.handleListProjects))
+	mux.Handle("POST /v1/projects", s.authenticated(s.handleCreateProject))
+	mux.Handle("GET /v1/projects/{id}", s.authenticated(s.handleGetProject))
+	mux.Handle("GET /v1/projects/{id}/members", s.authenticated(s.handleListMembers))
+	mux.Handle("PUT /v1/projects/{id}/members/{participant_id}", s.authenticated(s.handleSetMember))
+	mux.Handle("DELETE /v1/projects/{id}/members/{participant_id}", s.authenticated(s.handleRemoveMember))
+	mux.Handle("GET /v1/participants", s.authenticated(s.handleListParticipants))
+	mux.Handle("POST /v1/participants", s.authenticated(s.handleCreateParticipant))
+	mux.Handle("POST /v1/participants/{id}/tokens", s.authenticated(s.handleRotateToken))
+	mux.Handle("POST /v1/tokens/{id}/revoke", s.authenticated(s.handleRevokeToken))
+	mux.Handle("GET /v1/audit/chains", s.authenticated(s.handleListChains))
+	mux.Handle("GET /v1/audit", s.authenticated(s.handleListAudit))
+	mux.Handle("GET /v1/audit/verify", s.authenticated(s.handleVerifyChain))
 
 	return s.recoverer(
 		s.requestID(
@@ -80,11 +101,12 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
 		"api_version": "v1",
 		"database":    "sqlite",
 		"features": []string{
+			"identity",
 			"projects",
 			"participants",
-			"tickets",
-			"messages",
-			"documents",
+			"memberships",
+			"tokens",
+			"sessions",
 			"audit",
 		},
 	})
@@ -168,6 +190,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 				w.Header().Set("Vary", "Origin")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Session-Id")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Expose-Headers", "X-Session-Id, X-Request-Id")
 			}
 		}
 		if r.Method == http.MethodOptions {

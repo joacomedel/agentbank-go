@@ -17,6 +17,9 @@ type Config struct {
 	MaxBodyBytes    int64
 	ShutdownTimeout time.Duration
 	CORSOrigins     []string
+	// BootstrapToken solo se usa en el primer arranque si no existe un
+	// participante humano. No se loguea ni se guarda en claro.
+	BootstrapToken string
 }
 
 func getenv(key, fallback string) string {
@@ -61,6 +64,7 @@ func Load() (Config, error) {
 		}
 		cfg.MaxBodyBytes = value
 	}
+	cfg.BootstrapToken = strings.TrimSpace(os.Getenv("AGENTBANK_BOOTSTRAP_TOKEN"))
 	if raw := strings.TrimSpace(os.Getenv("AGENTBANK_SHUTDOWN_TIMEOUT")); raw != "" {
 		value, err := time.ParseDuration(raw)
 		if err != nil || value <= 0 {
