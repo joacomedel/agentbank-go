@@ -139,6 +139,41 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request, identi
 	s.writeJSON(w, http.StatusOK, toProject(project))
 }
 
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	var body struct {
+		Name    *string `json:"name"`
+		Slug    *string `json:"slug"`
+		Prefix  *string `json:"prefix"`
+		Version *int64  `json:"version"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid_json", "body JSON inválido: "+err.Error())
+		return
+	}
+	project, err := s.svc.UpdateProject(r.Context(), identity, r.PathValue("id"), service.ProjectUpdate{
+		Name: body.Name, Slug: body.Slug, Prefix: body.Prefix, Version: body.Version,
+	})
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, toProject(project))
+}
+
+func (s *Server) handleListProjectRoles(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	limit, err := parseLimit(r)
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	roles, next, err := s.svc.ListProjectRoles(r.Context(), identity, r.PathValue("id"), limit, r.URL.Query().Get("cursor"))
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, listResponse(roles, next))
+}
+
 func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request, identity service.Identity) {
 	limit, err := parseLimit(r)
 	if err != nil {

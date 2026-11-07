@@ -34,6 +34,8 @@ Prefijo: `/v1`
 | `GET /v1/me` | implementado |
 | `GET/POST /v1/projects` | implementado |
 | `GET /v1/projects/{id}` | implementado |
+| `PATCH /v1/projects/{id}` | implementado |
+| `GET /v1/projects/{id}/roles` | implementado |
 | `GET /v1/projects/{id}/members` | implementado |
 | `PUT/DELETE /v1/projects/{id}/members/{participant_id}` | implementado |
 | `GET/POST /v1/participants` | implementado |
@@ -80,6 +82,8 @@ humano `admin` de instancia y guarda solo `sha256(token)`.
   guardan solo hasheados.
 - Un participante tiene como máximo un token activo: emitir uno nuevo revoca el
   anterior. El texto plano se devuelve **una sola vez**.
+- Los tokens **no expiran**. Solo dejan de funcionar por rotación, revocación o
+  baja del participante. No hay refresh token ni scopes en el MVP.
 - `401` = token faltante, desconocido o revocado; sesión ajena. `403` = sin
   permiso. Todo rechazo de auth o permisos se audita en la cadena `system`.
 
@@ -156,6 +160,45 @@ Acepta UUID o slug. Requiere permiso de lectura en el proyecto. Devuelve el
 proyecto con `permission` y `roles` efectivos del actor.
 `403 requires_project_read` si no tiene acceso.
 
+### `PATCH /v1/projects/{id}`
+
+Cualquier participante autenticado puede editar los metadatos del proyecto.
+Cada cambio se audita en la cadena del proyecto como `proyecto.editar`. No hace
+falta ser miembro del proyecto.
+
+```json
+{"version":1,"name":"Nuevo nombre","slug":"nuevo-slug","prefix":"NUEVO"}
+```
+
+Todos los campos son opcionales, pero debe venir al menos uno de `name`, `slug`
+o `prefix`. `version` es opcional; si se envía y no coincide con la actual,
+responde `409 version_conflict`. La versión se incrementa en cada edición.
+
+Respuesta `200`: el proyecto actualizado, con `permission` y `roles` efectivos
+del actor (pueden venir vacíos si no es miembro).
+
+Errores: `404 project_not_found`, `409 project_slug_taken`,
+`409 project_prefix_taken`, `409 version_conflict`, `422 validation_error`.
+
+### `GET /v1/projects/{id}/roles`
+
+Requiere lectura del proyecto. Lista el catálogo de roles del proyecto y
+cuántas membresías usa cada rol. Los roles se auto-registran al asignarlos en
+una membresía; no hace falta crearlos antes.
+
+```json
+{
+  "items": [
+    {"name": "backend", "members": 2, "created_at": "2026-11-07T20:00:00.000000000Z"},
+    {"name": "dueño", "members": 1, "created_at": "2026-11-07T20:00:00.000000000Z"}
+  ],
+  "next_cursor": null
+}
+```
+
+Acepta `limit` y `cursor`. Errores: `403 requires_project_read`,
+`404 project_not_found`.
+
 ### `POST /v1/participants`
 
 Requiere admin de instancia. Crea un humano o agente, emite su primer token y
@@ -174,7 +217,8 @@ devuelve una sola vez.
 ```
 
 `type`: `humano` o `agente`. `permission`: `lector`, `colaborador` o `admin`.
-`roles`: hasta 20 roles de 1..32 caracteres (`\p{L}`, `\p{N}`, `_`, `-`).
+`roles`: hasta 20 roles de 1..32 caracteres (`\p{L}`, `\p{N}`, `_`, `-`). Los
+roles nuevos se agregan automáticamente al catálogo del proyecto.
 
 Respuesta `201`:
 
@@ -256,8 +300,9 @@ membresía.
 ```
 
 Respuesta `200` con la membresía. El cambio se audita en la cadena del proyecto
-como `membresia.cambiar`. Errores: `404 participant_not_found`,
-`403 requires_project_admin`, `422 validation_error`.
+como `membresia.cambiar`. Los roles nuevos se auto-registran en el catálogo del
+proyecto. Errores: `404 participant_not_found`, `403 requires_project_admin`,
+`422 validation_error`.
 
 ### `DELETE /v1/projects/{id}/members/{participant_id}`
 
@@ -279,7 +324,10 @@ como `membresia.quitar`.
 - **Membresía `colaborador`**: además podrá escribir tickets en fases
   posteriores.
 - **Membresía `admin`**: administra membresías del proyecto.
-- Los roles son etiquetas libres por proyecto; no cambian permisos en Fase 1.
+- **Edición de proyectos**: cualquier participante autenticado puede editar
+  `name`, `slug` y `prefix` vía `PATCH /v1/projects/{id}`. Queda auditado.
+- Los roles son etiquetas libres por proyecto y se auto-registran en el
+  catálogo; no cambian permisos en Fase 1.
 
 ## Auditoría
 
@@ -293,7 +341,7 @@ Eventos principales de Fase 1:
 
 - `bootstrap.humano`
 - `participante.crear`
-- `proyecto.crear`
+- `proyecto.crear`, `proyecto.editar`
 - `token.emitir`, `token.revocar`
 - `membresia.cambiar`, `membresia.quitar`
 - `sesion.abrir`
@@ -382,6 +430,7 @@ Errores: `400 validation_error` si falta `chain_id`, `404 chain_not_found`,
 | 409 | `participant_name_taken` | Nombre duplicado |
 | 409 | `membership_exists` | Membresía duplicada al crear participante |
 | 409 | `token_already_revoked` | El token ya estaba revocado |
+| 409 | `version_conflict` | `version` desactualizada al editar un proyecto |
 | 422 | `validation_error` | Body válido pero datos inválidos |
 | 500 | `internal_error` | Error interno (sin detalles en la respuesta) |
 

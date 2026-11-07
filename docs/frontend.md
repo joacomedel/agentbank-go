@@ -26,6 +26,9 @@ membresías y auditoría; el resto se agrega en fases posteriores.
    deja de funcionar inmediatamente.
 6. Para revocar, `POST /v1/tokens/{id}/revoke`.
 
+Los tokens no expiran: solo dejan de funcionar por rotación, revocación o baja.
+No hay refresh token ni scopes.
+
 No guardar tokens en el repo ni en logs. Para un MVP local, `sessionStorage` es
 aceptable; no usar `localStorage` si se puede evitar.
 
@@ -82,6 +85,11 @@ la devuelve en el header. Reenviarla evita ruido en auditoría.
   proyectos.
 - `GET /v1/projects/{id}` acepta UUID o slug.
 - `POST /v1/projects`: `slug`, `name` y `prefix` opcional.
+- `PATCH /v1/projects/{id}`: cualquier participante autenticado puede editar
+  `name`, `slug` y `prefix`; el cambio queda auditado. Enviar `version` para
+  detectar ediciones concurrentes (`409 version_conflict`).
+- `GET /v1/projects/{id}/roles`: catálogo de roles del proyecto con cantidad de
+  miembros. Los roles se auto-registran al asignarlos.
 - `GET /v1/projects/{id}/members`.
 - `PUT /v1/projects/{id}/members/{participant_id}` con `permission` y `roles`.
 - `DELETE /v1/projects/{id}/members/{participant_id}`.
@@ -104,6 +112,8 @@ la devuelve en el header. Reenviarla evita ruido en auditoría.
 - `membership`: `participant_id`, `project_id`, `permission`, `roles`,
   `created_at`. En `/v1/me` viene enriquecida con `project_slug` y
   `project_name`.
+- `project_role`: `name`, `members`, `created_at`. Es el catálogo por proyecto;
+  se llena solo al asignar roles.
 - `token`: solo se conoce `token_id`. El valor `token` aparece una única vez al
   emitirlo.
 - `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `action`,

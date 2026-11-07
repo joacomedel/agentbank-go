@@ -390,6 +390,84 @@ func TestAuditEndpointsAndTamperDetection(t *testing.T) {
 	}
 }
 
+func TestProjectEditAndRoleCatalog(t *testing.T) {
+	env := newIdentityServer(t)
+	project := env.createProject(t, "editable", "Editable")
+	projectID, _ := project["id"].(string)
+
+	status, body, _ := env.do(t, http.MethodPost, "/v1/participants", env.humanToken, map[string]any{
+		"name": "agente-editor-http", "type": "agente",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("crear agente: status=%d body=%v", status, body)
+	}
+	participant, _ := body["participant"].(map[string]any)
+	agentID, _ := participant["id"].(string)
+	agentToken, _ := body["token"].(string)
+
+	status, body, _ = env.do(t, http.MethodPatch, "/v1/projects/"+projectID, agentToken, map[string]any{
+		"name": "Editable por cualquiera",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("PATCH sin membresía: status=%d body=%v", status, body)
+	}
+	if body["name"] != "Editable por cualquiera" {
+		t.Fatalf("nombre no actualizado: %v", body)
+	}
+	if body["version"] != float64(2) {
+		t.Fatalf("version inesperada: %v", body)
+	}
+
+	status, body, _ = env.do(t, http.MethodPatch, "/v1/projects/"+projectID, agentToken, map[string]any{
+		"version": 1, "name": "Vieja versión",
+	})
+	if status != http.StatusConflict || body["code"] != "version_conflict" {
+		t.Fatalf("versión vieja: status=%d body=%v", status, body)
+	}
+
+	status, body, _ = env.do(t, http.MethodGet, "/v1/projects/"+projectID+"/roles", env.humanToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("GET roles: status=%d body=%v", status, body)
+	}
+	roles, _ := body["items"].([]any)
+	if len(roles) == 0 {
+		t.Fatalf("catálogo vacío: %v", body)
+	}
+
+	status, body, _ = env.do(t, http.MethodPost, "/v1/participants", env.humanToken, map[string]any{
+		"name": "agente-backend-http", "type": "agente",
+		"projects": []map[string]any{{"project_id": projectID, "permission": "colaborador", "roles": []string{"backend"}}},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("crear agente con rol: status=%d body=%v", status, body)
+	}
+	status, body, _ = env.do(t, http.MethodGet, "/v1/projects/"+projectID+"/roles", env.humanToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("GET roles con backend: status=%d body=%v", status, body)
+	}
+	found := false
+	for _, raw := range body["items"].([]any) {
+		role, _ := raw.(map[string]any)
+		if role["name"] == "backend" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("el catálogo no auto-registró backend: %v", body)
+	}
+
+	var actorID string
+	if err := env.handle.QueryRow(`
+		SELECT actor_id FROM audit_events
+		WHERE chain_id = ? AND action = 'proyecto.editar'`, projectID,
+	).Scan(&actorID); err != nil {
+		t.Fatalf("leer auditoría: %v", err)
+	}
+	if actorID != agentID {
+		t.Fatalf("actor de proyecto.editar=%q, want %q", actorID, agentID)
+	}
+}
+
 func TestAuditAccessForAgent(t *testing.T) {
 	env := newIdentityServer(t)
 	project := env.createProject(t, "audit-agent", "Audit agent")

@@ -20,8 +20,12 @@ Fase 1 (identidad y auditoría) implementada:
 
 - `GET /healthz` (ping a SQLite) y `GET /v1/meta`.
 - Bootstrap del humano con `AGENTBANK_BOOTSTRAP_TOKEN`.
-- Proyectos, participantes humano/agente, membresías y roles.
-- Tokens hasheados con rotación y revocación; un token activo por participante.
+- Proyectos, participantes humano/agente, membresías y catálogo de roles por
+  proyecto (auto-registrado al asignar).
+- Edición de metadatos de proyecto por cualquier participante autenticado, con
+  auditoría y control opcional de versión.
+- Tokens hasheados sin expiración, con rotación y revocación; un token activo
+  por participante.
 - Sesiones auditadas vía `X-Session-Id`.
 - Auditoría append-only con hash chain por proyecto y `system`, y verificación
   de integridad.

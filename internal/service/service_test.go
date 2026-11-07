@@ -303,6 +303,94 @@ func TestMembershipChangeUpdatesAccessAndAuditsProjectChain(t *testing.T) {
 	}
 }
 
+func TestRoleCatalogAndProjectEditByAnyAuthenticated(t *testing.T) {
+	svc, _, database := newTestService(t)
+	human, _ := bootstrap(t, svc)
+	project, err := svc.CreateProject(context.Background(), human, service.ProjectInput{
+		Slug: "catalogo", Name: "Catálogo",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	created, err := svc.CreateParticipant(context.Background(), human, service.ParticipantInput{
+		Name: "agente-roles", Type: domain.ParticipantAgent,
+		Projects: []service.ParticipantProjectInput{{
+			ProjectID: project.Project.ID, Permission: domain.PermissionReader, Roles: []string{"backend"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("CreateParticipant: %v", err)
+	}
+	if _, err := svc.SetMember(context.Background(), human, project.Project.ID, created.Participant.ID,
+		domain.PermissionWriter, []string{"revisor"}); err != nil {
+		t.Fatalf("SetMember: %v", err)
+	}
+	roles, _, err := svc.ListProjectRoles(context.Background(), human, project.Project.ID, 0, "")
+	if err != nil {
+		t.Fatalf("ListProjectRoles: %v", err)
+	}
+	got := make(map[string]int, len(roles))
+	for _, role := range roles {
+		got[role.Name] = role.Members
+	}
+	if _, ok := got["dueño"]; !ok || got["dueño"] != 1 {
+		t.Fatalf("rol dueño inesperado: %+v", roles)
+	}
+	if _, ok := got["backend"]; !ok || got["backend"] != 0 {
+		t.Fatalf("rol backend inesperado: %+v", roles)
+	}
+	if _, ok := got["revisor"]; !ok || got["revisor"] != 1 {
+		t.Fatalf("rol revisor inesperado: %+v", roles)
+	}
+
+	other, err := svc.CreateParticipant(context.Background(), human, service.ParticipantInput{
+		Name: "agente-editor", Type: domain.ParticipantAgent,
+	})
+	if err != nil {
+		t.Fatalf("CreateParticipant editor: %v", err)
+	}
+	editor, err := svc.Authenticate(context.Background(), other.Token)
+	if err != nil {
+		t.Fatalf("Authenticate editor: %v", err)
+	}
+	name := "Catálogo editado"
+	slug := "catalogo-editado"
+	prefix := "CATED"
+	updated, err := svc.UpdateProject(context.Background(), editor, project.Project.ID, service.ProjectUpdate{
+		Name: &name, Slug: &slug, Prefix: &prefix,
+	})
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if updated.Project.Name != name || updated.Project.Slug != slug || updated.Project.Prefix != prefix {
+		t.Fatalf("proyecto no actualizado: %+v", updated.Project)
+	}
+	if updated.Project.Version != project.Project.Version+1 {
+		t.Fatalf("version=%d, want %d", updated.Project.Version, project.Project.Version+1)
+	}
+	oldVersion := project.Project.Version
+	var conflictErr *service.ConflictError
+	if _, err := svc.UpdateProject(context.Background(), human, project.Project.ID, service.ProjectUpdate{
+		Name: &name, Version: &oldVersion,
+	}); !errors.As(err, &conflictErr) || conflictErr.Code != "version_conflict" {
+		t.Fatalf("versión vieja debía dar conflicto: %v", err)
+	}
+	var actorID string
+	if err := database.QueryRow(`
+		SELECT actor_id FROM audit_events
+		WHERE chain_id = ? AND action = 'proyecto.editar'`, project.Project.ID,
+	).Scan(&actorID); err != nil {
+		t.Fatalf("leer auditoría: %v", err)
+	}
+	if actorID != editor.Participant.ID {
+		t.Fatalf("actor de proyecto.editar=%q, want %q", actorID, editor.Participant.ID)
+	}
+	verify, err := audit.Verify(context.Background(), database, project.Project.ID)
+	if err != nil || !verify.OK {
+		t.Fatalf("cadena del proyecto inválida: %+v err=%v", verify, err)
+	}
+}
+
 func TestAuditFailureRollsBackBusinessChange(t *testing.T) {
 	svc, _, database := newTestService(t)
 	human, _ := bootstrap(t, svc)
