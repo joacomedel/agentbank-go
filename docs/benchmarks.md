@@ -28,6 +28,20 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
 abort térmico de 58 °C.
 
+## CI L3 (GitHub Actions)
+
+Run: https://github.com/joacomedel/agentbank-go/actions/runs/42413062755
+
+| Job | Resultado | Tiempo |
+|---|---|---:|
+| test (ubuntu-24.04) | ✅ race | 1m30s |
+| test (ubuntu-24.04-arm) | ✅ race | 1m02s |
+| build (linux/amd64) | ✅ | 46s |
+| build (linux/arm64) | ✅ | 32s |
+
+Artefactos: `agentbank-linux-amd64` 11.1 MB y `agentbank-linux-arm64`
+10.5 MB.
+
 ## Frío
 
 | Medición | Valor |
