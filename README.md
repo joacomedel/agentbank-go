@@ -1,5 +1,7 @@
 # agentbank-go
 
+[![CI](https://github.com/joacomedel/agentbank-go/actions/workflows/go.yml/badge.svg)](https://github.com/joacomedel/agentbank-go/actions)
+
 Reescritura del backend de AgentBank en **Go + SQLite**, sin frontend, pensada
 para correr en el Moto G20 con bajo consumo.
 
