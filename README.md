@@ -16,14 +16,19 @@ para correr en el Moto G20 con bajo consumo.
 
 ## Estado
 
-Scaffold inicial. Ya funciona:
+Fase 1 (identidad y auditoría) implementada:
 
-- `GET /healthz` (ping a SQLite).
-- `GET /v1/meta`.
-- Migraciones embebidas y esquema base de identidad/auditoría.
+- `GET /healthz` (ping a SQLite) y `GET /v1/meta`.
+- Bootstrap del humano con `AGENTBANK_BOOTSTRAP_TOKEN`.
+- Proyectos, participantes humano/agente, membresías y roles.
+- Tokens hasheados con rotación y revocación; un token activo por participante.
+- Sesiones auditadas vía `X-Session-Id`.
+- Auditoría append-only con hash chain por proyecto y `system`, y verificación
+  de integridad.
+- Migraciones embebidas e idempotentes.
 
-El resto del backend se implementa por fases; ver `docs/rewrite-plan.md` y
-`AGENTS.md`.
+Tickets, claims, fases, épicas, mensajes y documentos se implementan en fases
+posteriores; ver `docs/rewrite-plan.md` y `AGENTS.md`.
 
 ## Requisitos
 
@@ -34,8 +39,13 @@ El resto del backend se implementa por fases; ver `docs/rewrite-plan.md` y
 
 ```bash
 export PATH=/opt/go/bin:$PATH
+export AGENTBANK_BOOTSTRAP_TOKEN="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
 go run ./cmd/agentbank
 ```
+
+`AGENTBANK_BOOTSTRAP_TOKEN` solo es obligatorio en el primer arranque, cuando
+todavía no existe un participante humano. Después se ignora; guardá el token
+porque es la credencial inicial del humano.
 
 En otra terminal:
 
@@ -53,6 +63,7 @@ Configuración por entorno:
 | `AGENTBANK_LOG_LEVEL` | `info` | `debug|info|warn|error` |
 | `AGENTBANK_MAX_BODY_BYTES` | `1048576` | límite de body |
 | `AGENTBANK_CORS_ORIGINS` | vacío | orígenes permitidos, separados por coma |
+| `AGENTBANK_BOOTSTRAP_TOKEN` | vacío | token inicial del humano; requerido solo en el primer arranque |
 
 ## Build
 

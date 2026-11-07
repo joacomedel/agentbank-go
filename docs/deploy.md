@@ -27,6 +27,11 @@ install -o root -g agentbank -m 0640 \
 # editar /etc/agentbank/env si hace falta
 ```
 
+En el primer arranque, si la base está vacía, definir
+`AGENTBANK_BOOTSTRAP_TOKEN` con al menos 32 caracteres. Después del bootstrap se
+puede quitar del entorno; el humano ya tiene su token guardado hasheado.
+Generarlo con `openssl rand -base64 32`.
+
 ## 4. Servicio
 
 ```bash

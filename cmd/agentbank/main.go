@@ -15,6 +15,7 @@ import (
 	"github.com/joacomedel/agentbank-go/internal/config"
 	"github.com/joacomedel/agentbank-go/internal/db"
 	"github.com/joacomedel/agentbank-go/internal/httpapi"
+	"github.com/joacomedel/agentbank-go/internal/service"
 )
 
 func main() {
@@ -44,6 +45,14 @@ func run() error {
 	defer database.Close()
 	if err := db.Migrate(ctx, database); err != nil {
 		return err
+	}
+
+	bootstrap, err := service.New(database, nil).Bootstrap(ctx, cfg.BootstrapToken)
+	if err != nil {
+		return err
+	}
+	if bootstrap.Created {
+		logger.Info("bootstrap: participante humano creado", "participant_id", bootstrap.ParticipantID)
 	}
 
 	handler := httpapi.New(database, logger, httpapi.Options{

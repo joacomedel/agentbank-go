@@ -24,7 +24,8 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 		}
 	}
 	dsn := "file:" + path +
-		"?_pragma=busy_timeout(5000)" +
+		"?_txlock=immediate" +
+		"&_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
 		"&_pragma=foreign_keys(ON)" +
 		"&_pragma=synchronous(NORMAL)" +

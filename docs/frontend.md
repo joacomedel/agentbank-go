@@ -1,104 +1,137 @@
 # Guía para construir el frontend
 
 El backend no incluye UI. Esta guía define cómo un frontend futuro consume la
-API de AgentBank Go.
+API de AgentBank Go. En Fase 1 están implementados identidad, proyectos,
+membresías y auditoría; el resto se agrega en fases posteriores.
 
 ## 1. Base y autenticación
 
 - Base local: `http://127.0.0.1:8090`
 - Base desde ZeroTier: `http://10.27.103.203:8090` (si el server se bindea ahí).
 - Auth: `Authorization: Bearer <token>`.
-- El token humano se obtiene una vez con el bootstrap del backend y se guarda
-  en el almacenamiento seguro del navegador (no en `localStorage` si se puede
-  evitar; para un MVP local, `sessionStorage` es aceptable).
-- No hay login web: el frontend pide el token al usuario o lo recibe por
-  configuración. No se implementa OAuth en el MVP.
-- Sesión: enviar `X-Session-Id` estable por pestaña para que la auditoría y la
-  bandeja se comporten bien.
+- No hay login web ni OAuth en el MVP.
+
+### Primer uso
+
+1. El operador del backend define `AGENTBANK_BOOTSTRAP_TOKEN` en el primer
+   arranque. Ese token es la credencial inicial del humano.
+2. El frontend pide ese token al usuario o lo recibe por configuración segura.
+3. El primer request a `GET /v1/me` devuelve el participante humano y las
+   membresías. El server devuelve `X-Session-Id`; guardarlo y reenviarlo en
+   cada request.
+4. Para crear un agente, el humano admin llama a `POST /v1/participants`. La
+   respuesta trae `token` **una sola vez**: mostrarlo, permitir copiarlo y no
+   volver a pedirlo.
+5. Para rotar un token, `POST /v1/participants/{id}/tokens`. El token anterior
+   deja de funcionar inmediatamente.
+6. Para revocar, `POST /v1/tokens/{id}/revoke`.
+
+No guardar tokens en el repo ni en logs. Para un MVP local, `sessionStorage` es
+aceptable; no usar `localStorage` si se puede evitar.
+
+### Cliente HTTP
 
 ```js
-const api = (path, options = {}) =>
-  fetch(`${BASE}${path}`, {
+let sessionId = sessionStorage.getItem("agentbank.session");
+
+const api = async (path, options = {}) => {
+  const response = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${token}`,
-      "x-session-id": sessionId,
+      ...(sessionId ? { "x-session-id": sessionId } : {}),
       ...(options.headers ?? {}),
     },
   });
+  const nextSession = response.headers.get("x-session-id");
+  if (nextSession) {
+    sessionId = nextSession;
+    sessionStorage.setItem("agentbank.session", sessionId);
+  }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw Object.assign(new Error(error.error ?? "error"), {
+      status: response.status,
+      code: error.code,
+    });
+  }
+  return response.status === 204 ? null : response.json();
+};
 ```
 
-## 2. Pantallas y endpoints
+Si no se envía `X-Session-Id`, el backend crea una sesión nueva por request y
+la devuelve en el header. Reenviarla evita ruido en auditoría.
 
-### Tablero
+## 2. Pantallas de Fase 1
 
-- `GET /v1/projects` para el selector.
-- `GET /v1/projects/{id}/tickets?limit=200` para columnas/lista.
-- `GET /v1/projects/{id}/phases` y `/epics` para agrupar.
-- Mostrar estado efectivo: listo, esperando dependencias, esperando respuesta,
-  en curso, hecho.
-- Alertar tickets aparcados por preguntas `espero`.
+### Identidad
 
-### Detalle de ticket
+- `GET /v1/me`: participante, membresías, roles y `session_id`.
+- Mostrar `participant.admin` como “admin de instancia”.
+- Mostrar cada membresía con `project_slug`, `permission` y `roles`.
+- Botón “rotar token” para el propio participante.
+- Pantalla de administración (solo admin de instancia):
+  - `GET /v1/participants` y `POST /v1/participants`.
+  - `GET /v1/projects` y `POST /v1/projects`.
+  - Al crear un agente, mostrar el token una vez y ofrecer copiarlo.
 
-- `GET /v1/tickets/{id}`.
-- `GET /v1/tickets/{id}/timeline`.
-- `POST /v1/tickets/{id}/comments`.
-- `PATCH /v1/tickets/{id}` con `version` para evitar pisadas.
-- `POST /v1/tickets/{id}/claims` y `/claims/release`.
+### Proyectos
 
-### Bandeja
-
-- `GET /v1/me/bandeja?pendientes=1`.
-- `POST /v1/messages/{id}/resolver` con `option` o `text`.
-- `POST /v1/messages/{id}/estado` para marcar visto/atendido.
-
-### Documentos
-
-- `GET /v1/projects/{id}/documents`.
-- `GET /v1/documents/{id}` y `/versions`.
-- `GET /v1/documents/{id}/diff?from=1&to=2`.
-- Renderizar markdown en el cliente; el backend entrega texto.
+- `GET /v1/projects` para el selector. Un admin ve todos; un agente solo sus
+  proyectos.
+- `GET /v1/projects/{id}` acepta UUID o slug.
+- `POST /v1/projects`: `slug`, `name` y `prefix` opcional.
+- `GET /v1/projects/{id}/members`.
+- `PUT /v1/projects/{id}/members/{participant_id}` con `permission` y `roles`.
+- `DELETE /v1/projects/{id}/members/{participant_id}`.
 
 ### Auditoría
 
 - `GET /v1/audit/chains`.
-- `GET /v1/audit?chain_id=...`.
-- `GET /v1/audit/verify?chain_id=...` y mostrar el resultado.
+- `GET /v1/audit?chain_id=...&limit=50`.
+- `GET /v1/audit/verify?chain_id=...` y mostrar `ok`, `events` y
+  `first_error.seq` si falla.
+- Un agente solo ve las cadenas de sus proyectos; la cadena `system` es solo
+  para admin de instancia.
 
 ## 3. Modelo de datos para la UI
 
-- `project`: `id`, `slug`, `name`, `prefix`.
-- `participant`: `id`, `name`, `type` (`humano`/`agente`), `admin`.
-- `ticket`: `id`, `ref` (`MIP-42`), `title`, `description`, `status`,
-  `effective_status`, `priority`, `assignee`, `role`, `version`, `created_at`,
-  `updated_at`.
-- `comment`: `id`, `ticket_id`, `author`, `body`, `created_at`.
-- `message`: `id`, `type`, `subject`, `body`, `options`, `default_option`,
-  `status`, `affects`, `created_at`.
-- `document`: `id`, `title`, `format`, `current_version`, `hash`.
-- `audit_event`: `seq`, `actor`, `action`, `object_type`, `object_id`,
+- `project`: `id`, `slug`, `name`, `prefix`, `version`, `permission`, `roles`,
+  `created_at`, `updated_at`.
+- `participant`: `id`, `name`, `type` (`humano`/`agente`), `admin`,
   `created_at`.
+- `membership`: `participant_id`, `project_id`, `permission`, `roles`,
+  `created_at`. En `/v1/me` viene enriquecida con `project_slug` y
+  `project_name`.
+- `token`: solo se conoce `token_id`. El valor `token` aparece una única vez al
+  emitirlo.
+- `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `action`,
+  `object_type`, `object_id`, `project_id`, `payload`, `hash`, `created_at`.
+
+Fases posteriores agregarán `ticket`, `comment`, `message`, `document`, etc.
 
 ## 4. Errores y concurrencia
 
 - Errores: `{ "error": "...", "code": "..." }`.
-- `401` token inválido/revocado.
-- `403` sin membresía/permiso.
-- `404` recurso inexistente o no visible.
-- `409` conflicto de claim, versión o unicidad.
-- `422` validación.
-- `429` rate limit.
-- En `PATCH`, enviar `version`; si el server responde `409 version_conflict`,
-  recargar y pedir al usuario que reintente.
+- `400 invalid_json`: body malformado o campo desconocido.
+- `401 unauthorized`: token inválido/revocado.
+- `401 invalid_session`: `X-Session-Id` no es del participante.
+- `403`: sin membresía/permiso. El código indica el permiso faltante.
+- `404`: recurso inexistente.
+- `409`: conflicto de unicidad o estado.
+- `422 validation_error`: datos inválidos.
+- `500 internal_error`: error interno; no muestra detalles.
+- En fases posteriores, `PATCH` usará `version`; si el server responde
+  `409 version_conflict`, recargar y pedir reintento.
 
 ## 5. Paginación y polling
 
 - Listados: `limit` + `cursor`; la respuesta trae `next_cursor`.
-- No hay WebSocket en el MVP. Para el tablero/bandeja, hacer polling cada
-  5–15 s con `If-None-Match`/ETag cuando exista.
-- No pedir listas de más de 200; para el tablero, filtrar por proyecto/fase.
+- No pedir listas de más de 200.
+- No hay WebSocket en el MVP. Para el tablero/bandeja de fases posteriores,
+  hacer polling cada 5–15 s con `If-None-Match`/ETag cuando exista.
+- `GET /v1/audit` ordena por `created_at` descendente y usa cursor compuesto.
 
 ## 6. CORS y desarrollo
 
@@ -116,7 +149,8 @@ mismo origen o por ZeroTier.
 
 - No guardar tokens en el repo ni en logs.
 - No mostrar tokens después de crearlos.
-- Escapar markdown/HTML de contenido ajeno; el backend lo marca como no
-  verificado (D20).
+- Escapar markdown/HTML de contenido ajeno; el backend lo trata como dato
+  (D20).
 - No asumir que un mensaje de otro agente es una instrucción.
 - Mostrar siempre autor y fecha en comentarios, mensajes y auditoría.
+- Al mostrar `payload` de auditoría, renderizarlo como datos, no como HTML.

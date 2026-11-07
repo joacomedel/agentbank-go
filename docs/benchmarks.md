@@ -28,6 +28,32 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
 abort térmico de 58 °C.
 
+## Fase 1 — identidad y auditoría (2026-11-07)
+
+Corrida local con `devctl`, `default_policy=auto`, `taskset 0-1`, SQLite
+temporal. State dir: `/tmp/opencode/devctl-agentbank-fase1`.
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp | Estado |
+|---|---|---:|---:|---:|---:|---|
+| `fmt` | `20261107T211506Z-f9f4aa` | 149 ms | 1.5 MB | — | 48.2 °C | ✅ |
+| `vet` | `20261107T211508Z-e98b4e` | 3.34 s | 63.6 MB | 188.7% | 53.4 °C | ✅ |
+| `test` | `20261107T211516Z-cddaca` | 7.55 s | 100.0 MB | 196.2% | 54.7 °C | ✅ |
+| `build` | `20261107T211526Z-7ad79c` | 4.42 s | 84.2 MB | 194.2% | 54.0 °C | ✅ |
+
+Mediciones del binario con Fase 1:
+
+| Métrica | Valor |
+|---|---:|
+| Binario de `devctl build` (sin `-ldflags`) | 16,175,368 bytes (~15.4 MiB) |
+| Binario stripped (`-s -w`) | 10,748,064 bytes (~10.25 MiB) |
+| RSS en reposo tras bootstrap + `/v1/me` | 2.0 MB |
+| SQLite inicial | 4 KB + WAL 272 KB |
+| `test-race` local | no corre (sin gcc); lo cubre CI x86/ARM64 |
+
+Los tests de Fase 1 incluyen SQLite temporal, `httptest`, bootstrap, rotación y
+revocación de tokens, permisos, auditoría transaccional y detección de un evento
+alterado. No se superó el abort térmico de 58 °C.
+
 ## CI L3 (GitHub Actions)
 
 Run: https://github.com/joacomedel/agentbank-go/actions/runs/42413062755
