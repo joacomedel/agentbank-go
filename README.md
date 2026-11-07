@@ -62,6 +62,8 @@ go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 - `docs/api.md`: contrato HTTP.
 - `docs/frontend.md`: guía para el frontend futuro.
 - `docs/mapping.md`: mapa desde el repo TypeScript viejo.
+- `docs/benchmarks.md`: mediciones en el Moto.
+- `docs/deploy.md` y `deploy/`: systemd, límites y backup.
 - `docs/decisions/`: ADRs.
 
 ## Referencia
