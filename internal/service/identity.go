@@ -295,6 +295,9 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 			if err != nil {
 				return err
 			}
+			if err := registerRoles(ctx, tx, resolved.ID, project.Roles, now); err != nil {
+				return err
+			}
 			rolesJSON, err := encodeRoles(project.Roles)
 			if err != nil {
 				return err

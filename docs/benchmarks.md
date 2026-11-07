@@ -35,20 +35,23 @@ temporal. State dir: `/tmp/opencode/devctl-agentbank-fase1`.
 
 | Tarea | Run ID | Exec | RAM pico | CPU pico | Temp | Estado |
 |---|---|---:|---:|---:|---:|---|
-| `fmt` | `20261107T211506Z-f9f4aa` | 149 ms | 1.5 MB | — | 48.2 °C | ✅ |
-| `vet` | `20261107T211508Z-e98b4e` | 3.34 s | 63.6 MB | 188.7% | 53.4 °C | ✅ |
-| `test` | `20261107T211516Z-cddaca` | 7.55 s | 100.0 MB | 196.2% | 54.7 °C | ✅ |
-| `build` | `20261107T211526Z-7ad79c` | 4.42 s | 84.2 MB | 194.2% | 54.0 °C | ✅ |
+| `fmt` | `20261107T214022Z-91faf6` | 232 ms | 0.2 MB | — | 49.8 °C | ✅ |
+| `vet` | `20261107T214028Z-15a295` | 3.45 s | 68.0 MB | 197.0% | 54.0 °C | ✅ |
+| `test` | `20261107T214037Z-4a8431` | 7.81 s | 97.6 MB | 228.5% | 57.3 °C | ✅ |
+| `build` | `20261107T214053Z-9152c5` | 4.46 s | 89.3 MB | 197.3% | 53.7 °C | ✅ |
 
 Mediciones del binario con Fase 1:
 
 | Métrica | Valor |
 |---|---:|
-| Binario de `devctl build` (sin `-ldflags`) | 16,175,368 bytes (~15.4 MiB) |
-| Binario stripped (`-s -w`) | 10,748,064 bytes (~10.25 MiB) |
+| Binario de `devctl build` (sin `-ldflags`) | 16,248,270 bytes (~15.5 MiB) |
+| Binario stripped (`-s -w`) | 10,813,600 bytes (~10.31 MiB) |
 | RSS en reposo tras bootstrap + `/v1/me` | 2.0 MB |
-| SQLite inicial | 4 KB + WAL 272 KB |
+| SQLite inicial | 4 KB + WAL 296 KB |
 | `test-race` local | no corre (sin gcc); lo cubre CI x86/ARM64 |
+
+El pico de temperatura de `test` fue 57.3 °C, por debajo del abort de 58 °C,
+pero cerca del límite. La corrida siguiente arrancó con el equipo ya enfriado.
 
 Los tests de Fase 1 incluyen SQLite temporal, `httptest`, bootstrap, rotación y
 revocación de tokens, permisos, auditoría transaccional y detección de un evento

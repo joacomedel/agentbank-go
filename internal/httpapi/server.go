@@ -59,6 +59,8 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux.Handle("GET /v1/projects", s.authenticated(s.handleListProjects))
 	mux.Handle("POST /v1/projects", s.authenticated(s.handleCreateProject))
 	mux.Handle("GET /v1/projects/{id}", s.authenticated(s.handleGetProject))
+	mux.Handle("PATCH /v1/projects/{id}", s.authenticated(s.handleUpdateProject))
+	mux.Handle("GET /v1/projects/{id}/roles", s.authenticated(s.handleListProjectRoles))
 	mux.Handle("GET /v1/projects/{id}/members", s.authenticated(s.handleListMembers))
 	mux.Handle("PUT /v1/projects/{id}/members/{participant_id}", s.authenticated(s.handleSetMember))
 	mux.Handle("DELETE /v1/projects/{id}/members/{participant_id}", s.authenticated(s.handleRemoveMember))

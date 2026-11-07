@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/joacomedel/agentbank-go/internal/audit"
 	"github.com/joacomedel/agentbank-go/internal/domain"
@@ -89,6 +90,9 @@ func (s *Service) CreateProject(ctx context.Context, actor Identity, input Proje
 			return fmt.Errorf("crear proyecto: %w", err)
 		}
 		roles := []string{"dueño"}
+		if err := registerRoles(ctx, tx, view.Project.ID, roles, now); err != nil {
+			return err
+		}
 		rolesJSON, err := encodeRoles(roles)
 		if err != nil {
 			return err
@@ -215,6 +219,231 @@ func (s *Service) GetProject(ctx context.Context, actor Identity, ref string) (P
 	return ProjectView{Project: project, Permission: permission, Roles: roles}, nil
 }
 
+// ProjectUpdate permite editar metadatos. Los punteros distinguen ausencia de
+// campo. Cualquier participante autenticado puede editar; el cambio se audita.
+type ProjectUpdate struct {
+	Name    *string
+	Slug    *string
+	Prefix  *string
+	Version *int64
+}
+
+// UpdateProject actualiza nombre, slug o prefix y registra el cambio en la
+// cadena del proyecto.
+func (s *Service) UpdateProject(ctx context.Context, actor Identity, ref string, update ProjectUpdate) (ProjectView, error) {
+	if update.Name == nil && update.Slug == nil && update.Prefix == nil {
+		return ProjectView{}, validation("no hay campos para actualizar")
+	}
+	project, err := resolveProject(ctx, s.db, ref)
+	if err != nil {
+		return ProjectView{}, err
+	}
+	rights, err := s.loadRights(ctx, s.db, actor.Participant)
+	if err != nil {
+		return ProjectView{}, err
+	}
+	var view ProjectView
+	err = s.withTx(ctx, func(tx *sql.Tx) error {
+		current, err := scanProject(tx.QueryRowContext(ctx, `
+			SELECT id, slug, name, prefix, version, created_at, updated_at
+			FROM projects WHERE id = ?`, project.ID))
+		if errors.Is(err, sql.ErrNoRows) {
+			return notFound("project_not_found", "proyecto no encontrado")
+		}
+		if err != nil {
+			return err
+		}
+		if update.Version != nil && *update.Version != current.Version {
+			return conflict("version_conflict", "versión desactualizada")
+		}
+		previous := map[string]any{
+			"slug":   current.Slug,
+			"name":   current.Name,
+			"prefix": current.Prefix,
+		}
+		if update.Name != nil {
+			name := strings.TrimSpace(*update.Name)
+			if name == "" || len([]rune(name)) > 200 {
+				return validation("name debe tener entre 1 y 200 caracteres")
+			}
+			current.Name = name
+		}
+		if update.Slug != nil {
+			slug := strings.TrimSpace(*update.Slug)
+			if !slugPattern.MatchString(slug) {
+				return validation("slug inválido: minúsculas, números y guiones, sin guion final")
+			}
+			current.Slug = slug
+		}
+		if update.Prefix != nil {
+			prefix := strings.ToUpper(strings.TrimSpace(*update.Prefix))
+			if !prefixPattern.MatchString(prefix) {
+				return validation("prefix debe tener 2..10 caracteres A-Z o 0-9")
+			}
+			current.Prefix = prefix
+		}
+		now := s.now().UTC()
+		current.Version++
+		current.UpdatedAt = now
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE projects
+			SET slug = ?, name = ?, prefix = ?, version = ?, updated_at = ?
+			WHERE id = ?`,
+			current.Slug, current.Name, current.Prefix, current.Version,
+			timefmt.Format(now), current.ID,
+		); err != nil {
+			if isUniqueConstraint(err) {
+				if strings.Contains(strings.ToLower(err.Error()), "projects.slug") {
+					return conflict("project_slug_taken", "ya existe un proyecto con ese slug")
+				}
+				return conflict("project_prefix_taken", "ya existe un proyecto con ese prefix")
+			}
+			return fmt.Errorf("actualizar proyecto: %w", err)
+		}
+		if _, err := audit.Append(ctx, tx, audit.Input{
+			ChainID:    current.ID,
+			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Action:     "proyecto.editar",
+			ObjectType: "proyecto",
+			ObjectID:   current.ID,
+			ProjectID:  current.ID,
+			Payload: map[string]any{
+				"previous": previous,
+				"new": map[string]any{
+					"slug":   current.Slug,
+					"name":   current.Name,
+					"prefix": current.Prefix,
+				},
+			},
+			CreatedAt: now,
+		}); err != nil {
+			return err
+		}
+		permission, roles := rights.PermissionFor(current.ID)
+		view = ProjectView{Project: current, Permission: permission, Roles: roles}
+		return nil
+	})
+	if err != nil {
+		return ProjectView{}, err
+	}
+	return view, nil
+}
+
+// ProjectRole es una entrada del catálogo de roles de un proyecto.
+type ProjectRole struct {
+	Name      string    `json:"name"`
+	Members   int       `json:"members"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ListProjectRoles lista el catálogo de roles y cuántas membresías lo usan.
+func (s *Service) ListProjectRoles(ctx context.Context, actor Identity, ref string, limit int, cursor string) ([]ProjectRole, string, error) {
+	project, err := resolveProject(ctx, s.db, ref)
+	if err != nil {
+		return nil, "", err
+	}
+	rights, err := s.loadRights(ctx, s.db, actor.Participant)
+	if err != nil {
+		return nil, "", err
+	}
+	if !rights.CanRead(project.ID) {
+		return nil, "", forbidden("requires_project_read", "sin permiso de lectura en el proyecto", project.ID, "rol.listar", project.ID)
+	}
+	limit, err = normalizeLimit(limit)
+	if err != nil {
+		return nil, "", err
+	}
+	args := []any{project.ID}
+	where := ""
+	if cursor != "" {
+		where = " AND name > ?"
+		args = append(args, cursor)
+	}
+	args = append(args, limit+1)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT name, created_at FROM project_roles
+		WHERE project_id = ?`+where+`
+		ORDER BY name ASC
+		LIMIT ?`, args...)
+	if err != nil {
+		return nil, "", fmt.Errorf("listar roles: %w", err)
+	}
+	defer rows.Close()
+	roles := make([]ProjectRole, 0, limit)
+	for rows.Next() {
+		var role ProjectRole
+		var createdAt string
+		if err := rows.Scan(&role.Name, &createdAt); err != nil {
+			return nil, "", fmt.Errorf("escanear rol: %w", err)
+		}
+		parsed, err := timefmt.Parse(createdAt)
+		if err != nil {
+			return nil, "", fmt.Errorf("created_at de rol inválido: %w", err)
+		}
+		role.CreatedAt = parsed
+		roles = append(roles, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", fmt.Errorf("recorrer roles: %w", err)
+	}
+
+	usage, err := roleUsage(ctx, s.db, project.ID)
+	if err != nil {
+		return nil, "", err
+	}
+	for i := range roles {
+		roles[i].Members = usage[roles[i].Name]
+	}
+	next := ""
+	if len(roles) > limit {
+		roles = roles[:limit]
+		next = roles[len(roles)-1].Name
+	}
+	return roles, next, nil
+}
+
+func roleUsage(ctx context.Context, q queryer, projectID string) (map[string]int, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT roles FROM memberships WHERE project_id = ?`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("listar roles usados: %w", err)
+	}
+	defer rows.Close()
+	usage := make(map[string]int)
+	for rows.Next() {
+		var rolesJSON string
+		if err := rows.Scan(&rolesJSON); err != nil {
+			return nil, fmt.Errorf("escanear roles usados: %w", err)
+		}
+		var roles []string
+		if err := json.Unmarshal([]byte(rolesJSON), &roles); err != nil {
+			return nil, fmt.Errorf("roles inválidos: %w", err)
+		}
+		for _, role := range roles {
+			usage[role]++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("recorrer roles usados: %w", err)
+	}
+	return usage, nil
+}
+
+func registerRoles(ctx context.Context, tx *sql.Tx, projectID string, roles []string, now time.Time) error {
+	createdAt := timefmt.Format(now)
+	for _, role := range roles {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO project_roles(project_id, name, created_at)
+			VALUES (?, ?, ?)
+			ON CONFLICT(project_id, name) DO NOTHING`,
+			projectID, role, createdAt,
+		); err != nil {
+			return fmt.Errorf("registrar rol %q: %w", role, err)
+		}
+	}
+	return nil
+}
+
 // ListMembers lista las membresías de un proyecto.
 func (s *Service) ListMembers(ctx context.Context, actor Identity, ref string, limit int, cursor string) ([]domain.Member, string, error) {
 	project, err := resolveProject(ctx, s.db, ref)
@@ -304,6 +533,9 @@ func (s *Service) SetMember(ctx context.Context, actor Identity, ref, participan
 		now := s.now().UTC()
 		rolesJSON, err := encodeRoles(roles)
 		if err != nil {
+			return err
+		}
+		if err := registerRoles(ctx, tx, project.ID, roles, now); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
