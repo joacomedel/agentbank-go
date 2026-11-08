@@ -4,6 +4,8 @@ La regla general es
 [`/root/pipelineCompilacion/docs/testing-policy.md`](/root/pipelineCompilacion/docs/testing-policy.md).
 Este archivo solo agrega lo específico del proyecto.
 
+El playbook de sesión nueva está en `docs/handoff.md`.
+
 ## Matriz
 
 | Nivel | Comando | Dónde |

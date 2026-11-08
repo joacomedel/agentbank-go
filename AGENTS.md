@@ -9,6 +9,9 @@ correr en el Moto G20 con bajo consumo de CPU, RAM y disco.
 Este repositorio (`/root/agentbank-go`) es la implementación nueva.
 El repositorio viejo es **solo referencia de lectura**.
 
+Antes de empezar una sesión nueva, leé `docs/handoff.md`: resume el estado,
+el flujo de `devctl`, los pitfalls y los próximos pasos.
+
 ## 1. Fuente de verdad
 
 - Repo viejo: `/root/reference/BancoDeDatosAgente` (privado), commit `95f9a00`.
@@ -103,6 +106,9 @@ Todo lo que no esté acá es **deferred**, no se borra en silencio: se anota en
 - Índices para claves de búsqueda y listados; nunca listados sin `LIMIT`.
 - Backup con `VACUUM INTO` o copia consistente; documentar el procedimiento.
 - La base y `-wal`/`-shm` no se commitean.
+- **Nunca consultar `s.db` mientras un `*sql.Rows` está abierto**: recolectar,
+  cerrar el `Rows` y recién después consultar. Con `SetMaxOpenConns(1)` produce
+  deadlock.
 
 ## 7. Contrato HTTP
 
@@ -172,7 +178,8 @@ más débil que la política general.
 
 ## 11. Flujo de trabajo del agente
 
-1. Leer `docs/rewrite-plan.md`, `docs/scope.md` y la spec vieja relevante.
+1. Leer `docs/handoff.md`, `docs/rewrite-plan.md`, `docs/scope.md` y la spec
+   vieja relevante.
 2. Elegir **un** ítem del plan; no mezclar fases.
 3. Escribir/actualizar tests primero cuando sea posible.
 4. Implementar en capas: `internal/domain`, `internal/service`,

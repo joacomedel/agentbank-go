@@ -115,6 +115,7 @@ agentbank mcp
 - `docs/frontend.md`: guía para el frontend futuro.
 - `docs/mapping.md`: mapa desde el repo TypeScript viejo.
 - `docs/mcp-flows.md`: flujos MCP/CLI y conteo de llamadas.
+- `docs/handoff.md`: estado y playbook para una sesión nueva.
 - `docs/cli.md`: comandos de la CLI.
 - `docs/mcp.md`: servidor MCP, tools y configuración.
 - `docs/benchmarks.md`: mediciones en el Moto.
