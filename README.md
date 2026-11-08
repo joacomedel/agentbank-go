@@ -9,7 +9,7 @@ para correr en el Moto G20 con bajo consumo.
 > general está en `/root/pipelineCompilacion/docs/testing-policy.md` y la matriz
 > del proyecto en `TESTING.md`.
 
-- API HTTP `/v1` con documentación para construir el frontend después.
+- API HTTP `/v1` con OpenAPI/Swagger para construir la UI aparte.
 - Un solo binario, SQLite embebido, sin Docker/Postgres/Node.
 - Auditoría append-only con hash chain.
 - Objetivo: RSS en reposo ≤ 30 MB, binario ≤ 20 MB, p95 local ≤ 50 ms.
@@ -81,6 +81,13 @@ Configuración por entorno:
 ```bash
 go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 ```
+
+## OpenAPI / Swagger
+
+- Spec: `GET /openapi.json` o `GET /v1/openapi.json`.
+- Swagger UI de desarrollo: `GET /swagger` (carga el spec; requiere internet
+  para el CDN, o usar cualquier Swagger UI local apuntando a `/openapi.json`).
+- La UI de producto no se implementa en este repo.
 
 ## Documentación
 

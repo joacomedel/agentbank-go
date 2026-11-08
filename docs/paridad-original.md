@@ -39,7 +39,7 @@ pendientes (etapas 7–9). SQLite reemplaza a Postgres por decisión de ADR 0001
 | 25 | Briefing | ✅ |
 | 26 | Convertir/corregir respuestas | ✅ |
 | 27 | Trazas | ✅ cierre, descubierto, timeline; menciones `@rol` pendientes |
-| 28 | UI tablero/bandeja | ⬜ Etapa 8 |
+| 28 | UI tablero/bandeja | ➖ Fuera de este repo; se construye contra OpenAPI |
 | 29 | Participantes/membresías | ✅ |
 | 30 | Red de seguridad | ✅ en lo implementado: strict JSON, 409, D20 |
 | 31 | Telegram | ⬜ Etapa 9 |
@@ -65,7 +65,8 @@ archivado.
 - `ticket_avanzar` modo `divido` no crea ticket hijo todavía.
 - Handoff se resuelve como mensaje con texto, sin estructura adicional.
 - Menciones `@rol`/`@participante` en comentarios todavía no generan mensajes.
-- Sin UI, CLI, MCP, Telegram ni contratos.
+- Sin UI de producto (se construye aparte contra OpenAPI), sin CLI/MCP,
+  Telegram ni contratos.
 
 ## Próximas etapas
 

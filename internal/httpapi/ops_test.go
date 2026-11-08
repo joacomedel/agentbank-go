@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -227,5 +228,36 @@ func TestIdempotencyAndAdminHTTP(t *testing.T) {
 	status, novedades, _ := env.do(t, http.MethodGet, "/v1/novedades", env.humanToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("novedades: status=%d body=%v", status, novedades)
+	}
+}
+
+func TestOpenAPIAndSwaggerExposed(t *testing.T) {
+	env := newIdentityServer(t)
+	status, spec, _ := env.do(t, http.MethodGet, "/openapi.json", "", nil)
+	if status != http.StatusOK {
+		t.Fatalf("openapi: status=%d body=%v", status, spec)
+	}
+	if spec["openapi"] == nil {
+		t.Fatalf("spec inesperada: %v", spec)
+	}
+	paths, _ := spec["paths"].(map[string]any)
+	for _, path := range []string{
+		"/v1/projects/{id}/phases", "/v1/projects/{id}/epics",
+		"/v1/projects/{id}/tickets", "/v1/tickets/siguiente",
+		"/v1/messages", "/v1/documents/{id}/versions",
+		"/v1/projects/{id}/import", "/v1/audit/verify",
+	} {
+		if _, ok := paths[path]; !ok {
+			t.Fatalf("falta %s en OpenAPI", path)
+		}
+	}
+	response, err := http.Get(env.server.URL + "/swagger")
+	if err != nil {
+		t.Fatalf("swagger: %v", err)
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	if response.StatusCode != http.StatusOK || !strings.HasPrefix(response.Header.Get("Content-Type"), "text/html") {
+		t.Fatalf("swagger: status=%d content-type=%q", response.StatusCode, response.Header.Get("Content-Type"))
 	}
 }
