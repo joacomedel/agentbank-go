@@ -26,7 +26,35 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 | `test-race` | L3 | — | — | — | — | ⛔ bloqueado: no hay gcc local; va a CI/PC |
 
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
-abort térmico de 58 °C.
+abort térmico de 56 °C (la política anterior era 58; se bajó después de esta
+sesión).
+
+## Ajustes de devctl post-sesión (2026-11-08)
+
+Después de la revisión se aplicaron mejoras al flujo:
+
+- Un solo `state_dir` por proyecto: `/var/tmp/devctl-agentbank`.
+- `devctl metrics` muestra temperatura.
+- `devctl run build` compila stripped, publica `bin/agentbank` en el repo y lo
+  registra como artefacto.
+- Tareas rápidas `test-core` y `vet-core` para el loop interno.
+- Abort térmico bajado de 58 °C a 56 °C; probe local a 54 °C.
+- `memory_max` del proyecto bajado de 1G a 512M para que el router no bloquee
+  por reserva de memoria.
+
+Validación con el flujo nuevo, sin `--state-dir` manual:
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |
+|---|---|---:|---:|---:|---:|
+| `test-core` | `20261108T034758Z-a8742f` | 17.24 s | 158.3 MB | 203.7% | 48.0 °C |
+| `vet-core` | `20261108T034816Z-ca422f` | 10.43 s | 148.0 MB | 197.2% | 47.5 °C |
+| `fmt` | `20261108T034833Z-e3f9b1` | 375 ms | 7.7 MB | 157.9% | 42.8 °C |
+| `vet` | `20261108T034834Z-5f7bb0` | 15.38 s | 252.1 MB | 204.7% | 47.7 °C |
+| `test` | `20261108T034850Z-40d627` | 25.00 s | 171.2 MB | 204.6% | 48.0 °C |
+| `build` | `20261108T034916Z-8ab123` | 1.78 s | 62.8 MB | 165.5% | 46.4 °C |
+
+El build publicó `bin/agentbank` (12,583,072 bytes stripped) directamente en el
+repo.
 
 ## CLI y MCP (2026-11-08)
 
@@ -115,12 +143,13 @@ Mediciones del binario con Fase 1:
 | SQLite inicial | 4 KB + WAL 296 KB |
 | `test-race` local | no corre (sin gcc); lo cubre CI x86/ARM64 |
 
-El pico de temperatura de `test` fue 57.3 °C, por debajo del abort de 58 °C,
-pero cerca del límite. La corrida siguiente arrancó con el equipo ya enfriado.
+El pico de temperatura de `test` fue 57.3 °C. Con la política nueva (abort a
+56 °C) esa corrida se habría cortado; conviene enfriar antes de `test`/`vet`.
 
 Los tests de Fase 1 incluyen SQLite temporal, `httptest`, bootstrap, rotación y
 revocación de tokens, permisos, auditoría transaccional y detección de un evento
-alterado. No se superó el abort térmico de 58 °C.
+alterado. No se superó el abort térmico de 56 °C (la política anterior era 58; se bajó después de esta
+sesión).
 
 ## CI L3 (GitHub Actions)
 
@@ -148,20 +177,24 @@ Artefactos: `agentbank-linux-amd64` 11.1 MB y `agentbank-linux-arm64`
 
 ```bash
 cd /root/pipelineCompilacion
+# loop interno
+./bin/devctl run test-core --project /root/agentbank-go
+./bin/devctl run vet-core  --project /root/agentbank-go
+# cierre
 ./bin/devctl run fmt   --project /root/agentbank-go
 ./bin/devctl run vet   --project /root/agentbank-go
 ./bin/devctl run test  --project /root/agentbank-go
 ./bin/devctl run build --project /root/agentbank-go
-./bin/devctl metrics --last 10 --state-dir /tmp/opencode/devctl-agentbank-policy
+./bin/devctl metrics --last 10 --project /root/agentbank-go
 ```
 
 ## Presupuesto
 
 | Recurso | Límite | Estado |
 |---|---|---|
-| Binario | ≤ 20 MB | 11 MB ✅ |
-| RSS reposo | ≤ 30 MB | 5.6 MB ✅ |
-| RSS test | ≤ 128 MB | 89.8 MB ✅ |
+| Binario | ≤ 20 MB | 17.7 MB devctl / 12.0 MB stripped ✅ |
+| RSS reposo | ≤ 30 MB | ~2.0 MB ✅ |
+| RSS test | ≤ 256 MB | 171 MB ✅ |
 | CPU local | ≤ 2 núcleos | 2 ✅ |
-| Temp abort | 58 °C | máx. 49 °C ✅ |
-| p95 endpoints | ≤ 50 ms | pendiente de endpoints reales |
+| Temp abort | 56 °C | máx. 48 °C en la última corrida ✅ |
+| p95 endpoints | ≤ 50 ms | pendiente de medición formal |

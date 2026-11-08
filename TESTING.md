@@ -34,12 +34,23 @@ Este archivo solo agrega lo específico del proyecto.
 
 ```bash
 cd /root/pipelineCompilacion
+# loop interno (rápido)
+./bin/devctl run test-core --project /root/agentbank-go
+./bin/devctl run vet-core  --project /root/agentbank-go
+
+# cierre de etapa (completo)
 ./bin/devctl run fmt   --project /root/agentbank-go
 ./bin/devctl run vet   --project /root/agentbank-go
 ./bin/devctl run test  --project /root/agentbank-go
 ./bin/devctl run build --project /root/agentbank-go
-./bin/devctl metrics --last 5 --state-dir /tmp/opencode/devctl-agentbank
+
+# el proyecto define state_dir = /var/tmp/devctl-agentbank
+./bin/devctl metrics --last 10 --project /root/agentbank-go
 ```
+
+`devctl run build` usa `-ldflags='-s -w'`, declara `bin/agentbank` como
+artefacto y lo publica en el proyecto (`publish = true`), así no hace falta
+repetir un build stripped a mano.
 
 Reportar `run_id`, duración, RAM pico, CPU y temperatura. Si `test-race` no
 corre local, indicar el run de CI que lo cubre.
