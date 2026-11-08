@@ -20,14 +20,14 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 | Tarea | Nivel | Exec | RAM pico | CPU pico | Temp | Estado |
 |---|---|---:|---:|---:|---:|---|
 | `fmt` | L0 | 177 ms | 0.3 MB | — | 41 °C | ✅ |
-| `vet` | L0 | 1.68 s | 45.1 MB | 189% | 48 °C | ✅ |
+| `vet` | L0 | 1.68 s | 45.1 MB | 189% | 49 °C | ✅ |
 | `test` | L1 | 3.80 s | 89.8 MB | 190% | 49 °C | ✅ |
 | `build` | L2 | 3.56 s | 78.8 MB | 197% | 47.5 °C | ✅ |
 | `test-race` | L3 | — | — | — | — | ⛔ bloqueado: no hay gcc local; va a CI/PC |
 
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
-abort térmico de 56 °C (la política anterior era 58; se bajó después de esta
-sesión).
+abort térmico de 58 °C; se probó 56 °C y resultó demasiado agresivo para
+vet/test, así que se mantiene 58 con arranque debajo de 54 °C.
 
 ## Ajustes de devctl post-sesión (2026-11-08)
 
@@ -38,7 +38,8 @@ Después de la revisión se aplicaron mejoras al flujo:
 - `devctl run build` compila stripped, publica `bin/agentbank` en el repo y lo
   registra como artefacto.
 - Tareas rápidas `test-core` y `vet-core` para el loop interno.
-- Abort térmico bajado de 58 °C a 56 °C; probe local a 54 °C.
+- `fmt`/`build` arrancan debajo de 54 °C; `lint`/`test` debajo de 49 °C;
+  cooldown hasta 300 s; abort térmico en 58 °C sostenidos ~1 s (10 muestras).
 - `memory_max` del proyecto bajado de 1G a 512M para que el router no bloquee
   por reserva de memoria.
 
@@ -55,6 +56,20 @@ Validación con el flujo nuevo, sin `--state-dir` manual:
 
 El build publicó `bin/agentbank` (12,583,072 bytes stripped) directamente en el
 repo.
+
+Con el Moto caliente, `vet`/`test` y `vet-core`/`test-core` usan un core y el
+abort térmico requiere ~1 s sostenido. Corridas finales:
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |
+|---|---|---:|---:|---:|---:|
+| `test-core` | `20261108T062936Z-f11943` | 34.55 s | 152.7 MB | 102.9% | 55.0 °C |
+| `vet-core` | `20261108T063023Z-73ee4a` | 19.66 s | 147.9 MB | 102.9% | 54.7 °C |
+| `fmt` | `20261108T063112Z-b94c28` | 390 ms | 6.6 MB | 143.3% | 54.0 °C |
+| `vet` | `20261108T063113Z-b69d2e` | 33.50 s | 274.6 MB | 102.8% | 56.6 °C |
+| `test` | `20261108T063328Z-9accf8` | 54.36 s | 187.7 MB | 110.2% | 56.0 °C |
+| `build` | `20261108T063435Z-6f9f97` | 2.43 s | 53.0 MB | 173.4% | 54.2 °C |
+
+Todas terminaron en `success`.
 
 ## CLI y MCP (2026-11-08)
 
@@ -143,13 +158,13 @@ Mediciones del binario con Fase 1:
 | SQLite inicial | 4 KB + WAL 296 KB |
 | `test-race` local | no corre (sin gcc); lo cubre CI x86/ARM64 |
 
-El pico de temperatura de `test` fue 57.3 °C. Con la política nueva (abort a
-56 °C) esa corrida se habría cortado; conviene enfriar antes de `test`/`vet`.
+El pico de temperatura de `test` fue 57.3 °C. Con un abort a 56 °C esa corrida
+se habría cortado; se mantiene 58 °C y se exige arrancar debajo de 54 °C.
 
 Los tests de Fase 1 incluyen SQLite temporal, `httptest`, bootstrap, rotación y
 revocación de tokens, permisos, auditoría transaccional y detección de un evento
-alterado. No se superó el abort térmico de 56 °C (la política anterior era 58; se bajó después de esta
-sesión).
+alterado. No se superó el abort térmico de 58 °C; se probó 56 °C y resultó demasiado agresivo para
+vet/test, así que se mantiene 58 con arranque debajo de 54 °C.
 
 ## CI L3 (GitHub Actions)
 
@@ -196,5 +211,5 @@ cd /root/pipelineCompilacion
 | RSS reposo | ≤ 30 MB | ~2.0 MB ✅ |
 | RSS test | ≤ 256 MB | 171 MB ✅ |
 | CPU local | ≤ 2 núcleos | 2 ✅ |
-| Temp abort | 56 °C | máx. 48 °C en la última corrida ✅ |
+| Temp abort | 58 °C (arranque <54 °C) | máx. 49 °C en la última corrida ✅ |
 | p95 endpoints | ≤ 50 ms | pendiente de medición formal |

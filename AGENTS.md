@@ -138,6 +138,12 @@ documentarlo en `docs/api.md` como diferencia.
 
 - Token: `ab_<32 bytes base64url>`; guardar `sha256(token)`; comparación
   constant-time; un token activo por participante; rotación revoca el anterior.
+- El humano guarda `~/.config/agentbank/human.token`; cada agente tiene
+  `~/.config/agentbank/tokens/<agente>.token` y se auto-enrola con el humano.
+  Cada token tiene su identidad: no se comparten entre agentes.
+- `participants.agent_role` etiqueta el rol funcional (`orquestador`, `auditor`,
+  `backend`, etc.); se snapshotea en `tickets.created_by_role` y en
+  `audit_events.actor_role`.
 - Rate limit simple en memoria por token/IP; bloqueo temporal tras fallos.
 - Validación estricta de JSON (`DisallowUnknownFields`), límites de tamaño y
   listas.
@@ -201,7 +207,7 @@ más débil que la política general.
 | 4 | Mensajes, bandeja, opciones/default, `afecta`, conversión/corrección | ✅ |
 | 5 | Documentos versionados, docs globales, sync, decisiones, búsqueda | ✅ |
 | 6 | Import, barridos, heartbeat, pausa, outbox/webhooks, long-poll, idempotencia, rate limit, secret scanner, métricas | ✅ |
-| 7 | CLI Go, MCP sin perfiles, `init` y worker básico | ✅ |
+| 7 | CLI Go, MCP sin perfiles, `init`, tokens por agente y worker básico | ✅ |
 | 8 | UI tablero/bandeja (fuera de este repo; otro equipo contra OpenAPI) | ➖ |
 | 9 | Telegram, contratos, bloqueos/escalado, choque de áreas | ⬜ |
 | 10 | systemd, backup, benchmark y despliegue en Moto | ⬜ |
@@ -240,9 +246,10 @@ Con `devctl`:
 
 ```bash
 cd /root/pipelineCompilacion
-# loop interno
+# loop interno (un core; confiable con el Moto caliente)
 ./bin/devctl run test-core --project /root/agentbank-go
 ./bin/devctl run vet-core  --project /root/agentbank-go
+# opcional si el Moto está frío: test-fast / vet-fast
 # cierre de etapa
 ./bin/devctl run fmt   --project /root/agentbank-go
 ./bin/devctl run vet   --project /root/agentbank-go
@@ -252,7 +259,9 @@ cd /root/pipelineCompilacion
 ```
 
 El proyecto define `state_dir = /var/tmp/devctl-agentbank` y el `build`
-publica `bin/agentbank` como artefacto en el repo.
+publica `bin/agentbank` como artefacto en el repo. `devctl` arranca `fmt`/`build`
+debajo de 54 °C y `lint`/`test` debajo de 49 °C; si está más caliente espera
+hasta 300 s. Aborta a 58 °C.
 
 ## 15. Prohibiciones
 

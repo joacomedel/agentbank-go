@@ -41,7 +41,7 @@ Prefijo: `/v1`
 | Área | Endpoints |
 |---|---|
 | Salud | `GET /healthz`, `GET /v1/meta`, `GET /openapi.json`, `GET /swagger` |
-| Identidad | `GET /v1/me`, `GET/POST /v1/participants`, `POST /v1/participants/{id}/tokens`, `POST /v1/participants/{id}/baja`, `POST /v1/tokens/{id}/revoke`, `POST /v1/me/heartbeat` |
+| Identidad | `GET /v1/me`, `GET/POST /v1/participants`, `PATCH /v1/participants/{id}`, `POST /v1/participants/{id}/tokens`, `POST /v1/participants/{id}/tokens/revoke`, `POST /v1/participants/{id}/baja`, `POST /v1/tokens/{id}/revoke`, `POST /v1/me/heartbeat` |
 | Proyectos | `GET/POST /v1/projects`, `GET/PATCH /v1/projects/{id}`, `POST /v1/projects/{id}/pausa`, `POST /v1/projects/{id}/seguir` |
 | Membresías | `GET /v1/projects/{id}/members`, `PUT/DELETE /v1/projects/{id}/members/{participant_id}`, `GET /v1/projects/{id}/roles` |
 | Tickets | `GET/POST /v1/projects/{id}/tickets`, `GET/PATCH /v1/tickets/{id}`, `POST /v1/tickets/{id}/avanzar`, `POST /v1/tickets/siguiente`, `GET /v1/tickets/listas`, `POST /v1/tickets/{id}/claims`, `POST /v1/tickets/{id}/claims/release`, `POST/DELETE /v1/tickets/{id}/dependencies`, `POST/GET /v1/tickets/{id}/comments`, `GET /v1/tickets/{id}/timeline`, `POST/GET /v1/tickets/{id}/documents` |
@@ -80,7 +80,7 @@ Un participante tiene como máximo un token activo.
 
 ```json
 {
-  "participant": {"id":"…","type":"humano","name":"humano","status":"activo","admin":true,"created_at":"…"},
+  "participant": {"id":"…","type":"humano","name":"humano","status":"activo","agent_role":"","admin":true,"created_at":"…"},
   "memberships": [{"project_id":"…","project_slug":"…","project_name":"…","permission":"admin","roles":["dueño"],"created_at":"…"}],
   "session_id": "…"
 }
@@ -88,9 +88,11 @@ Un participante tiene como máximo un token activo.
 
 Con `?proyecto=<id|slug>` agrega `briefing`.
 
-### `GET /v1/participants?activos=1&limit=50&cursor=`
+### `GET /v1/participants?activos=1&type=agente&role=auditor&name=auditor-1`
 
-Lista participantes. No expone tokens.
+Lista participantes. Filtros: `activos=1`, `type`, `role` (agent_role),
+`name`, `limit`, `cursor`. No expone tokens. Cada participante incluye
+`agent_role`.
 
 ### `POST /v1/participants`
 
@@ -98,16 +100,28 @@ Requiere admin de instancia. Crea humano/agente, emite token una sola vez y
 asigna membresías en la misma transacción.
 
 ```json
-{"name":"backend-1","type":"agente","admin":false,"projects":[{"project_id":"…","permission":"colaborador","roles":["backend"]}]}
+{"name":"backend-1","type":"agente","agent_role":"backend","admin":false,"projects":[{"project_id":"…","permission":"colaborador","roles":["backend"]}]}
 ```
 
 ```json
-{"participant":{"id":"…","type":"agente","name":"backend-1","status":"activo","admin":false,"created_at":"…"},"token":"ab_…","token_id":"…"}
+{"participant":{"id":"…","type":"agente","name":"backend-1","status":"activo","agent_role":"backend","admin":false,"created_at":"…"},"token":"ab_…","token_id":"…"}
+```
+
+### `PATCH /v1/participants/{id}`
+
+Requiere admin de instancia. Actualiza el rol funcional del agente.
+
+```json
+{"agent_role":"auditor"}
 ```
 
 ### `POST /v1/participants/{id}/tokens`
 
 Rota el token: revoca el activo y devuelve el nuevo una vez.
+
+### `POST /v1/participants/{id}/tokens/revoke`
+
+Revoca el token activo del participante sin emitir uno nuevo.
 
 ### `POST /v1/tokens/{id}/revoke`
 
@@ -200,6 +214,7 @@ Respuesta `201`:
   "title":"…","description":"…","description_content":{"content":"…","untrusted":true,"source":"ticket_description"},
   "status":"abierto","effective_status":"listo","priority":"alta",
   "role":"backend","phase_id":"","epic_id":"…","order_index":1,"version":1,
+  "created_by":"…","created_by_role":"auditor",
   "paths":["src/auth"],"dependencies":[],"dependents":[],"claims":[],"comments_count":0,
   "created_at":"…","updated_at":"…"
 }

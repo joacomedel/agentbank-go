@@ -49,6 +49,7 @@ type queryer interface {
 func auditActor(identity Identity) audit.Actor {
 	return audit.Actor{
 		Type: identity.Participant.Type, ID: identity.Participant.ID,
+		Role:      identity.Participant.AgentRole,
 		SessionID: identity.SessionID, Origin: identity.Origin,
 	}
 }
@@ -145,7 +146,7 @@ func scanParticipant(row interface{ Scan(...any) error }) (domain.Participant, e
 	var participant domain.Participant
 	var admin int
 	var createdAt string
-	if err := row.Scan(&participant.ID, &participant.Type, &participant.Name, &participant.Status, &admin, &createdAt); err != nil {
+	if err := row.Scan(&participant.ID, &participant.Type, &participant.Name, &participant.Status, &participant.AgentRole, &admin, &createdAt); err != nil {
 		return domain.Participant{}, fmt.Errorf("escanear participante: %w", err)
 	}
 	participant.Admin = admin == 1
@@ -179,7 +180,7 @@ func scanProject(row interface{ Scan(...any) error }) (domain.Project, error) {
 
 func getParticipant(ctx context.Context, q queryer, participantID string) (domain.Participant, error) {
 	participant, err := scanParticipant(q.QueryRowContext(ctx, `
-		SELECT id, type, name, status, admin, created_at FROM participants WHERE id = ?`,
+		SELECT id, type, name, status, agent_role, admin, created_at FROM participants WHERE id = ?`,
 		participantID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Participant{}, notFound("participant_not_found", "participante no encontrado")
@@ -205,14 +206,14 @@ func (s *Service) Authenticate(ctx context.Context, plainToken string) (Identity
 	var createdAt string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT t.id, t.token_hash, t.revoked_at,
-		       p.id, p.type, p.name, p.admin, p.status, p.created_at
+		       p.id, p.type, p.name, p.agent_role, p.admin, p.status, p.created_at
 		FROM tokens t
 		JOIN participants p ON p.id = t.participant_id
 		WHERE t.token_hash = ?`, computed,
 	).Scan(
 		&identity.TokenID, &hash, &revokedAt,
 		&identity.Participant.ID, &identity.Participant.Type, &identity.Participant.Name,
-		&admin, &status, &createdAt,
+		&identity.Participant.AgentRole, &admin, &status, &createdAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Identity{}, ErrInvalidToken

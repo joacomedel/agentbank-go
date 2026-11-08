@@ -20,6 +20,7 @@ import (
 type Actor struct {
 	Type      string
 	ID        string
+	Role      string
 	SessionID string
 	Origin    string
 }
@@ -127,14 +128,15 @@ func Append(ctx context.Context, tx *sql.Tx, input Input) (Event, error) {
 		INSERT INTO audit_events
 			(id, chain_id, seq, actor_id, actor_type, action, object_type,
 			 object_id, project_id, payload, prev_hash, hash, created_at,
-			 session_id, origin, correlation_id, parent_event_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 session_id, origin, correlation_id, parent_event_id, actor_role)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		event.ID, event.ChainID, event.Seq, nullable(event.ActorID), event.ActorType,
 		event.Action, event.ObjectType, nullable(event.ObjectID), nullable(event.ProjectID),
 		event.Payload, event.PrevHash, event.Hash, timefmt.Format(event.CreatedAt),
 		nullable(firstNonEmpty(input.SessionID, input.Actor.SessionID)),
 		nullable(firstNonEmpty(input.Origin, input.Actor.Origin)),
 		nullable(input.CorrelationID), nullable(input.ParentEventID),
+		input.Actor.Role,
 	); err != nil {
 		return Event{}, fmt.Errorf("audit: insertar evento: %w", err)
 	}

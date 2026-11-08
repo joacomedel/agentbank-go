@@ -6,7 +6,7 @@ La CLI es un cliente fino de la API. No tiene lógica de negocio propia.
 
 ```bash
 cd /root/agentbank-go
-go build -trimpath -o bin/agentbank ./cmd/agentbank
+go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 ```
 
 El mismo binario arranca el server, la CLI y el MCP:
@@ -22,10 +22,14 @@ agentbank mcp          # MCP por stdio
 
 Orden de precedencia:
 
-1. `AGENTBANK_URL`, `AGENTBANK_TOKEN`, `AGENTBANK_PROJECT`.
-2. `.agentbank.json` en el directorio actual (`server`, `project`; sin secretos).
-3. `~/.config/agentbank/config.json` (`server`, `project`).
-4. `~/.config/agentbank/token` o `~/.config/agentbank/humano.token` para el token.
+1. `AGENTBANK_URL`, `AGENTBANK_TOKEN`, `AGENTBANK_HUMAN_TOKEN`,
+   `AGENTBANK_PROJECT`, `AGENTBANK_AGENT`, `AGENTBANK_AGENT_ROLE`.
+2. `.agentbank.json` en el directorio actual (`server`, `project`, `agent`,
+   `agent_role`; sin secretos).
+3. `~/.config/agentbank/config.json` (`server`, `project`, `agent`,
+   `agent_role`).
+4. `~/.config/agentbank/human.token` para el humano.
+5. `~/.config/agentbank/tokens/<agente>.token` para agentes.
 
 Defaults:
 
@@ -33,21 +37,51 @@ Defaults:
 AGENTBANK_URL=http://127.0.0.1:8090
 ```
 
+### `agentbank login`
+
+```bash
+agentbank login --url http://127.0.0.1:8090 --token 'ab_...' --project API
+```
+
+Valida el token con `GET /v1/me` y lo guarda en
+`~/.config/agentbank/human.token` con `0600`.
+
 ### `agentbank init`
 
 ```bash
 agentbank init \
   --url http://127.0.0.1:8090 \
   --project API \
+  --agent opencode-main \
+  --role orquestador \
   --token 'ab_...'
 ```
 
 Escribe:
 
-- `.agentbank.json` con `{server, project}` (sin token, apto para git).
-- `~/.config/agentbank/config.json` con `{server, project}`.
-- `~/.config/agentbank/token` con permisos `0600` si se pasa `--token` o
+- `.agentbank.json` con `{server, project, agent, agent_role}` (sin token, apto
+  para git).
+- `~/.config/agentbank/config.json` con los mismos datos.
+- `~/.config/agentbank/human.token` con `0600` si se pasa `--token` o
   `--token-file`.
+
+### `agentbank agent`
+
+```bash
+agentbank agent list
+agentbank agent list --role auditor
+agentbank agent ensure --agent auditor-1 --role auditor --project API
+agentbank agent rotate --agent auditor-1
+agentbank agent revoke --agent auditor-1
+agentbank agent disable --agent auditor-1
+```
+
+- `ensure` crea/reutiliza el agente y guarda su token.
+- `rotate` rota y guarda el token local.
+- `revoke` revoca el token activo.
+- `disable` da de baja al participante.
+
+Los agentes se enrolan solos con `human.token`; no hace falta copiar tokens.
 
 ## Comandos principales
 
@@ -142,6 +176,7 @@ agentbank admin dispatch
 
 ```bash
 agentbank worker --project API --role backend --cmd 'tu-comando' --max 10
+agentbank worker --project API --agent worker-backend --agent-role backend --role backend --cmd 'tu-comando'
 agentbank worker --project API --simulado --max 1
 ```
 
@@ -152,6 +187,8 @@ agentbank worker --project API --simulado --max 1
   y libera el claim.
 - Expone `AGENTBANK_TICKET`, `AGENTBANK_TICKET_ID`, `AGENTBANK_TICKET_REF`,
   `AGENTBANK_TOKEN`, `AGENTBANK_URL` y `AGENTBANK_PROJECT` al comando hijo.
+- `--agent`/`--agent-role` definen la identidad y el rol funcional; si no hay
+  token local, se enrola con `human.token`.
 - No implementa `opencode-server` ni `--worktree` todavía.
 
 ### Escape hatch

@@ -165,10 +165,11 @@ type ParticipantProjectInput struct {
 
 // ParticipantInput es el alta de un humano o agente.
 type ParticipantInput struct {
-	Name     string
-	Type     string
-	Admin    bool
-	Projects []ParticipantProjectInput
+	Name      string
+	Type      string
+	AgentRole string
+	Admin     bool
+	Projects  []ParticipantProjectInput
 }
 
 // ParticipantCreation devuelve el token en claro una sola vez.
@@ -194,6 +195,15 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 	participantType := strings.TrimSpace(strings.ToLower(input.Type))
 	if participantType != domain.ParticipantHuman && participantType != domain.ParticipantAgent {
 		return ParticipantCreation{}, validation("type debe ser humano o agente")
+	}
+	agentRole := strings.TrimSpace(input.AgentRole)
+	if agentRole != "" {
+		if _, err := normalizeRoles([]string{agentRole}); err != nil {
+			return ParticipantCreation{}, err
+		}
+	}
+	if participantType == domain.ParticipantHuman && agentRole != "" {
+		return ParticipantCreation{}, validation("un humano no lleva agent_role")
 	}
 	projects := make([]ParticipantProjectInput, 0, len(input.Projects))
 	seenProjects := make(map[string]struct{}, len(input.Projects))
@@ -232,13 +242,14 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 			Type:      participantType,
 			Name:      name,
 			Status:    "activo",
+			AgentRole: agentRole,
 			Admin:     input.Admin,
 			CreatedAt: now,
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO participants(id, type, name, admin, created_at)
-			VALUES (?, ?, ?, ?, ?)`,
-			created.Participant.ID, participantType, name, boolInt(input.Admin), timefmt.Format(now),
+			INSERT INTO participants(id, type, name, agent_role, admin, created_at)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			created.Participant.ID, participantType, name, agentRole, boolInt(input.Admin), timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("participant_name_taken", "ya existe un participante con ese name")
@@ -268,6 +279,7 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 				"participant_id": created.Participant.ID,
 				"name":           name,
 				"type":           participantType,
+				"agent_role":     agentRole,
 				"admin":          input.Admin,
 				"token_id":       created.TokenID,
 				"projects":       projectIDs(projects),
@@ -341,7 +353,7 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 }
 
 // ListParticipants devuelve participantes para usuarios autenticados.
-func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string, activeOnly bool) ([]domain.Participant, string, error) {
+func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string, activeOnly bool, participantType, role, name string) ([]domain.Participant, string, error) {
 	limit, err := normalizeLimit(limit)
 	if err != nil {
 		return nil, "", err
@@ -350,6 +362,18 @@ func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string
 	conditions := []string{}
 	if activeOnly {
 		conditions = append(conditions, "status = 'activo'")
+	}
+	if participantType != "" {
+		conditions = append(conditions, "type = ?")
+		args = append(args, strings.ToLower(strings.TrimSpace(participantType)))
+	}
+	if role != "" {
+		conditions = append(conditions, "agent_role = ?")
+		args = append(args, strings.TrimSpace(role))
+	}
+	if name != "" {
+		conditions = append(conditions, "name = ?")
+		args = append(args, strings.TrimSpace(name))
 	}
 	if cursor != "" {
 		conditions = append(conditions, "name > ?")
@@ -361,7 +385,7 @@ func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, type, name, status, admin, created_at
+		SELECT id, type, name, status, agent_role, admin, created_at
 		FROM participants `+where+`
 		ORDER BY name ASC
 		LIMIT ?`, args...)
@@ -422,6 +446,64 @@ func (s *Service) DisableParticipant(ctx context.Context, actor Identity, partic
 		})
 		return err
 	})
+}
+
+// UpdateParticipant actualiza el rol funcional del agente.
+func (s *Service) UpdateParticipant(ctx context.Context, actor Identity, participantID, agentRole string) (domain.Participant, error) {
+	if !actor.Participant.Admin {
+		return domain.Participant{}, forbidden("requires_instance_admin", "solo el admin de instancia edita participantes", "", "participante.editar", participantID)
+	}
+	agentRole = strings.TrimSpace(agentRole)
+	if agentRole != "" {
+		if _, err := normalizeRoles([]string{agentRole}); err != nil {
+			return domain.Participant{}, err
+		}
+	}
+	var participant domain.Participant
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		target, err := getParticipant(ctx, tx, participantID)
+		if err != nil {
+			return err
+		}
+		if target.Type != domain.ParticipantAgent && agentRole != "" {
+			return validation("solo los agentes llevan agent_role")
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE participants SET agent_role = ? WHERE id = ?`, agentRole, participantID,
+		); err != nil {
+			return fmt.Errorf("actualizar participante: %w", err)
+		}
+		target.AgentRole = agentRole
+		participant = target
+		_, err = audit.Append(ctx, tx, audit.Input{
+			ChainID: domain.SystemChain, Actor: auditActor(actor),
+			Action: "participante.editar", ObjectType: "participante", ObjectID: participantID,
+			Payload:   map[string]any{"participant_id": participantID, "agent_role": agentRole},
+			CreatedAt: s.now().UTC(),
+		})
+		return err
+	})
+	if err != nil {
+		return domain.Participant{}, err
+	}
+	return participant, nil
+}
+
+// RevokeParticipantToken revoca el token activo de un participante.
+func (s *Service) RevokeParticipantToken(ctx context.Context, actor Identity, participantID string) error {
+	var tokenID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM tokens WHERE participant_id = ? AND revoked_at IS NULL`,
+		participantID,
+	).Scan(&tokenID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return notFound("token_not_found", "el participante no tiene token activo")
+	}
+	if err != nil {
+		return fmt.Errorf("buscar token activo: %w", err)
+	}
+	_, err = s.RevokeToken(ctx, actor, tokenID)
+	return err
 }
 
 // RotateToken revoca el token activo del participante y emite uno nuevo.

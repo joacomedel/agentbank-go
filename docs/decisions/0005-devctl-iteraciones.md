@@ -49,7 +49,13 @@ La sesión de implementación de las etapas 1–7 agregó ~18.700 líneas y 52 t
 ### Temperatura y memoria
 
 - Probe local: `max_temp_c = 54`.
-- Abort térmico: `abort_temp_c = 56` (antes 58).
+- Abort térmico: `abort_temp_c = 58`. Se probó 56, pero vet/test suben a 56 °C
+  en menos de 2 s y abortaban tareas normales; se mantiene 58 con arranque
+  debajo de 54.
+- Cooldown: `fmt`/`build` arrancan debajo de 54 °C; `lint`/`test` debajo de
+  49 °C. Si está más caliente, `devctl` espera hasta 300 s antes de lanzar.
+- El abort térmico requiere ~1 s (10 muestras) a 58 °C para ignorar picos
+  espurios de compilación.
 - `memory_max` del proyecto: `512M` (antes `1G`). Los picos medidos fueron
   ~280 MB en `vet` y ~171 MB en `test`; 512 MB deja margen y evita que el
   router bloquee por la reserva de 1200 MB.
@@ -64,7 +70,7 @@ La sesión de implementación de las etapas 1–7 agregó ~18.700 líneas y 52 t
 
 - Menos builds duplicados y métricas comparables.
 - El loop interno es más barato; el cierre de etapa sigue siendo completo.
-- La política térmica es más conservadora.
+- La política térmica exige arrancar frío (<54 °C) y deja margen hasta 58 °C.
 - El router ya no bloquea AgentBank Go con la memoria disponible típica del
   Moto.
 - Si un build falla al publicar por “Text file busy”, hay que detener el server

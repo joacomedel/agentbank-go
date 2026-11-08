@@ -11,7 +11,7 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
   mensajes, documentos, operación/hardening, CLI/MCP/worker básico.
 - **52 tests** verdes.
 - `main` incluye OpenAPI/Swagger, feed incremental `/v1/changes`, CLI y MCP de
-  73 tools sin perfiles.
+  75 tools sin perfiles, tokens por agente y `agent_role`.
 - Pendiente: ejecutor `opencode-server`/worktrees del worker, Telegram,
   contratos entre proyectos, bloqueos/escalado y choque de áreas.
 - La UI se construye **fuera de este repo** contra OpenAPI.
@@ -25,7 +25,9 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 5. `docs/paridad-original.md`
 6. `docs/api.md`
 7. `docs/mcp-flows.md`
-8. `docs/decisions/0004-fases-2-6.md` y `0005-devctl-iteraciones.md`
+8. `docs/tokens.md`
+9. `docs/decisions/0004-fases-2-6.md`, `0005-devctl-iteraciones.md` y
+   `0006-tokens-por-agente.md`
 
 ## 3. Flujo de trabajo
 
@@ -113,14 +115,24 @@ estaban en `ListTickets`, `ListPhases` y `listTicketsByQuery`.
 - `novedades?wait=` es long-poll.
 - Flujos y conteos: `docs/mcp-flows.md`.
 
-## 6. CLI y MCP
+## 6. Tokens, CLI y MCP
 
-- CLI: `agentbank <comando>`; `agentbank help`.
-- MCP: `agentbank mcp`, JSON-RPC por stdio, 73 tools sin perfiles.
-- Config: `AGENTBANK_URL`, `AGENTBANK_TOKEN`, `AGENTBANK_PROJECT`,
-  `.agentbank.json` (sin secretos), token local en
-  `~/.config/agentbank/token`.
+- Token humano: `~/.config/agentbank/human.token` (`0600`), guardado con
+  `agentbank login`.
+- Tokens de agentes: `~/.config/agentbank/tokens/<agente>.token` (`0600`).
+- `agentbank mcp` y `agentbank worker` se auto-enrolan con el token humano si
+  falta el token del agente.
+- `agent_role` es la etiqueta funcional (`orquestador`, `auditor`, `backend`):
+  se guarda en `participants.agent_role`, se snapshotea en
+  `tickets.created_by_role` y se registra en `audit_events.actor_role`.
+- CLI: `agentbank <comando>`; `agentbank login`, `agentbank init`,
+  `agentbank agent list|ensure|rotate|revoke|disable`.
+- MCP: `agentbank mcp`, JSON-RPC por stdio, 75 tools sin perfiles.
+- Config: `AGENTBANK_URL`, `AGENTBANK_HUMAN_TOKEN`, `AGENTBANK_AGENT`,
+  `AGENTBANK_AGENT_ROLE`, `AGENTBANK_PROJECT`, `.agentbank.json` (sin secretos).
 - `agentbank api --method … --path … --body …` es el escape hatch.
+- Detalle: `docs/tokens.md`.
+- Setup OpenCode: `scripts/setup-opencode-mcp.py` (login + ensure + MCP).
 
 ## 7. Próximos pasos sugeridos
 

@@ -150,13 +150,15 @@ mismo body/path devuelve la respuesta original.
 ## 3. Modelo de datos para la UI
 
 - `project`: `id`, `slug`, `name`, `prefix`, `version`, `permission`, `roles`.
-- `participant`: `id`, `name`, `type`, `status`, `admin`, `created_at`.
+- `participant`: `id`, `name`, `type`, `status`, `agent_role`, `admin`,
+  `created_at`.
 - `membership`: `participant_id`, `project_id`, `permission`, `roles`.
 - `project_role`: `name`, `members`, `created_at`.
 - `ticket`: `id`, `ref`, `number`, `key`, `title`, `description`,
   `description_content`, `status`, `effective_status`, `priority`,
   `assignee_id`, `role`, `phase_id`, `epic_id`, `version`, `paths`,
-  `discovered_in`, `dependencies`, `dependents`, `claims`.
+  `discovered_in`, `created_by`, `created_by_role`, `dependencies`,
+  `dependents`, `claims`.
 - `phase`: `id`, `key`, `name`, `order_index`, `status`, `progress`.
 - `epic`: `id`, `phase_id`, `key`, `title`, `order_index`, `status`.
 - `message`: `id`, `type`, `destination_type`, `subject`, `body`,
@@ -165,7 +167,8 @@ mismo body/path devuelve la respuesta original.
 - `document`: `id`, `project_id`, `title`, `route`, `type`, `pinned`,
   `current_version`, `hash`, `content_content`.
 - `decision`: `id`, `title`, `status`, `body`, `body_content`.
-- `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `action`,
+- `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `actor_role`,
+  `action`,
   `object_type`, `object_id`, `project_id`, `payload`, `hash`, `created_at`.
 
 ## 4. Errores y concurrencia

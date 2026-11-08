@@ -87,8 +87,9 @@ func (s *Service) Changes(ctx context.Context, actor Identity, since, projectRef
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, chain_id, seq, actor_type, COALESCE(actor_id, ''), action,
 		       object_type, COALESCE(object_id, ''), COALESCE(project_id, ''),
-		       COALESCE(session_id, ''), COALESCE(origin, ''), COALESCE(correlation_id, ''),
-		       COALESCE(parent_event_id, ''), payload, prev_hash, hash, created_at
+		       COALESCE(actor_role, ''), COALESCE(session_id, ''), COALESCE(origin, ''),
+		       COALESCE(correlation_id, ''), COALESCE(parent_event_id, ''), payload,
+		       prev_hash, hash, created_at
 		FROM audit_events
 		WHERE `+strings.Join(conditions, " AND ")+`
 		ORDER BY `+order+`

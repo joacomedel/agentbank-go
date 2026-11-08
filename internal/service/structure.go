@@ -687,7 +687,7 @@ func (s *Service) listPhaseLooseTickets(ctx context.Context, actor Identity, pro
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
 		       t.created_at, t.updated_at
 		FROM tickets t
 		WHERE t.phase_id = ? AND t.epic_id IS NULL
@@ -700,7 +700,7 @@ func (s *Service) listEpicTickets(ctx context.Context, actor Identity, project d
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE epic_id = ?
 		ORDER BY order_index, created_at`,

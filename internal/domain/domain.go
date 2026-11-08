@@ -21,6 +21,7 @@ type Participant struct {
 	Type      string
 	Name      string
 	Status    string
+	AgentRole string
 	Admin     bool
 	CreatedAt time.Time
 }
