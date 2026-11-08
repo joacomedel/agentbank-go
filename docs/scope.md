@@ -1,5 +1,10 @@
 # Alcance — MVP vs deferred
 
+> Actualización 2026-11-08: el operador pidió avanzar hasta la etapa 6 del
+> plan. Las etapas 1–6 (backend HTTP) están implementadas; las etapas 7–9
+> (CLI, MCP, UI, Telegram, contratos y choque de áreas) siguen pendientes.
+> Ver `docs/rewrite-plan.md`, `docs/api.md` y `docs/paridad-original.md`.
+
 ## MVP (debe funcionar en el Moto)
 
 ### Identidad

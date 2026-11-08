@@ -28,6 +28,32 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
 abort térmico de 58 °C.
 
+## Etapas 2–6 — tickets, mensajes, docs y operación (2026-11-08)
+
+Corrida local con `devctl`, state dir
+`/tmp/opencode/devctl-agentbank-fases26`.
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp | Estado |
+|---|---|---:|---:|---:|---:|---|
+| `fmt` | `20261108T001420Z-f1fe2c` | 399 ms | 8.2 MB | 146.7% | 44.6 °C | ✅ |
+| `vet` | `20261108T001425Z-290655` | 8.65 s | 127.1 MB | 231.8% | 52.1 °C | ✅ |
+| `test` | `20261108T001438Z-5ee61a` | 15.80 s | 159.5 MB | 204.7% | 51.9 °C | ✅ |
+| `build` | `20261108T001500Z-372f15` | 10.05 s | 124.2 MB | 204.0% | 50.8 °C | ✅ |
+
+Mediciones del binario:
+
+| Métrica | Valor |
+|---|---:|
+| Binario de `devctl build` (sin `-ldflags`) | 17,880,750 bytes (~17.1 MiB) |
+| Binario stripped (`-s -w`) | 11,993,248 bytes (~11.4 MiB) |
+| RSS en reposo tras bootstrap + `/v1/me` | 2.0 MB |
+| SQLite inicial | 4 KB + WAL 696 KB |
+| Tests | 44 |
+
+El binario sigue por debajo de 20 MB. El test subió a 15.8 s y 159.5 MB por la
+cantidad de integración nueva; sigue dentro del presupuesto local de 1 GB y de
+2 núcleos. `test-race` se cubre en CI.
+
 ## Fase 1 — identidad y auditoría (2026-11-07)
 
 Corrida local con `devctl`, `default_policy=auto`, `taskset 0-1`, SQLite

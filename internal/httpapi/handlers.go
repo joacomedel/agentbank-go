@@ -13,6 +13,7 @@ type participantJSON struct {
 	ID        string    `json:"id"`
 	Type      string    `json:"type"`
 	Name      string    `json:"name"`
+	Status    string    `json:"status"`
 	Admin     bool      `json:"admin"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -22,6 +23,7 @@ func toParticipant(participant domain.Participant) participantJSON {
 		ID:        participant.ID,
 		Type:      participant.Type,
 		Name:      participant.Name,
+		Status:    participant.Status,
 		Admin:     participant.Admin,
 		CreatedAt: participant.CreatedAt,
 	}
@@ -85,11 +87,20 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, identity servi
 		s.respondError(w, r, identity, err)
 		return
 	}
-	s.writeJSON(w, http.StatusOK, map[string]any{
+	response := map[string]any{
 		"participant": toParticipant(identity.Participant),
 		"memberships": memberships,
 		"session_id":  identity.SessionID,
-	})
+	}
+	if projectRef := strings.TrimSpace(r.URL.Query().Get("proyecto")); projectRef != "" {
+		briefing, err := s.svc.Briefing(r.Context(), identity, projectRef)
+		if err != nil {
+			s.respondError(w, r, identity, err)
+			return
+		}
+		response["briefing"] = briefing
+	}
+	s.writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request, identity service.Identity) {
@@ -223,7 +234,7 @@ func (s *Server) handleListParticipants(w http.ResponseWriter, r *http.Request, 
 		s.respondError(w, r, identity, err)
 		return
 	}
-	participants, next, err := s.svc.ListParticipants(r.Context(), limit, r.URL.Query().Get("cursor"))
+	participants, next, err := s.svc.ListParticipants(r.Context(), limit, r.URL.Query().Get("cursor"), r.URL.Query().Get("activos") == "1")
 	if err != nil {
 		s.respondError(w, r, identity, err)
 		return
@@ -268,6 +279,14 @@ func (s *Server) handleCreateParticipant(w http.ResponseWriter, r *http.Request,
 		"token":       created.Token,
 		"token_id":    created.TokenID,
 	})
+}
+
+func (s *Server) handleDisableParticipant(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	if err := s.svc.DisableParticipant(r.Context(), identity, r.PathValue("id")); err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "status": "baja"})
 }
 
 func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request, identity service.Identity) {

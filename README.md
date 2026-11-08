@@ -16,23 +16,30 @@ para correr en el Moto G20 con bajo consumo.
 
 ## Estado
 
-Fase 1 (identidad y auditoría) implementada:
+Etapas 1–6 implementadas (backend HTTP):
 
-- `GET /healthz` (ping a SQLite) y `GET /v1/meta`.
-- Bootstrap del humano con `AGENTBANK_BOOTSTRAP_TOKEN`.
-- Proyectos, participantes humano/agente, membresías y catálogo de roles por
-  proyecto (auto-registrado al asignar).
-- Edición de metadatos de proyecto por cualquier participante autenticado, con
-  auditoría y control opcional de versión.
-- Tokens hasheados sin expiración, con rotación y revocación; un token activo
-  por participante.
-- Sesiones auditadas vía `X-Session-Id`.
-- Auditoría append-only con hash chain por proyecto y `system`, y verificación
-  de integridad.
-- Migraciones embebidas e idempotentes.
+- **Identidad**: bootstrap del humano, proyectos, participantes humano/agente,
+  membresías, roles por proyecto, tokens hasheados sin expiración, rotación,
+  revocación y baja, sesiones.
+- **Tickets**: CRUD, estados, prioridad, versión, dependencias con detección de
+  ciclos, claims con lease, `ticket_siguiente`, comentarios, timeline, IDs
+  `PREFIX-N`, `ticket_avanzar` con nota y pregunta.
+- **Organización**: fases, épicas, orden, cierre con pendientes, briefing,
+  digest y tablero.
+- **Mensajes**: `info`/`solicitud`, bandeja unificada, destinos, opciones con
+  default, `afecta`, resolución, defaults asumidos, conversión a decisión o
+  ticket, corrección y handoff.
+- **Conocimiento**: documentos versionados con hash y diff, docs globales, sync
+  por ruta, decisiones/ADRs, adjuntos a tickets y búsqueda `LIKE`.
+- **Operación**: import JSON con dry-run y ciclos, barridos, heartbeat, pausa,
+  outbox/webhooks, long-poll de novedades, idempotencia, rate limit, escaneo de
+  secretos, métricas y verificación global de auditoría.
+- **Auditoría**: append-only con hash chain por proyecto y `system`, sesión,
+  origen, correlación y verificación de integridad.
 
-Tickets, claims, fases, épicas, mensajes y documentos se implementan en fases
-posteriores; ver `docs/rewrite-plan.md` y `AGENTS.md`.
+Faltan las etapas 7–9: CLI, MCP, worker, UI, Telegram, contratos entre
+proyectos y choque de áreas. Ver `docs/rewrite-plan.md`, `docs/scope.md` y
+`docs/api.md`.
 
 ## Requisitos
 
