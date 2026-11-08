@@ -51,6 +51,7 @@ func (s *Server) handleListTickets(w http.ResponseWriter, r *http.Request, ident
 		Status: query.Get("status"), Priority: query.Get("priority"),
 		Role: query.Get("role"), AssigneeID: query.Get("assignee_id"),
 		PhaseID: query.Get("phase_id"), EpicID: query.Get("epic_id"), Key: query.Get("key"),
+		UpdatedSince: query.Get("updated_since"),
 	}, limit, query.Get("cursor"))
 	if err != nil {
 		s.respondError(w, r, identity, err)

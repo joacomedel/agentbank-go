@@ -53,7 +53,7 @@ func (s *Server) listDocuments(w http.ResponseWriter, r *http.Request, identity 
 		s.respondError(w, r, identity, err)
 		return
 	}
-	documents, next, err := s.svc.ListDocuments(r.Context(), identity, projectID, limit, r.URL.Query().Get("cursor"))
+	documents, next, err := s.svc.ListDocuments(r.Context(), identity, projectID, limit, r.URL.Query().Get("cursor"), r.URL.Query().Get("updated_since"))
 	if err != nil {
 		s.respondError(w, r, identity, err)
 		return

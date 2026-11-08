@@ -120,7 +120,7 @@ func openAPIOperations() []opDef {
 		{"DELETE", "/v1/projects/{id}/members/{participant_id}", "Proyectos", "Quitar membresía", "", "FreeObject", nil},
 		{"GET", "/v1/projects/{id}/roles", "Proyectos", "Listar catálogo de roles", "", "RoleList", []string{"limit", "cursor"}},
 
-		{"GET", "/v1/projects/{id}/tickets", "Tickets", "Listar tickets", "", "TicketList", []string{"limit", "cursor", "status", "priority", "role", "assignee_id", "phase_id", "epic_id", "key"}},
+		{"GET", "/v1/projects/{id}/tickets", "Tickets", "Listar tickets", "", "TicketList", []string{"limit", "cursor", "status", "priority", "role", "assignee_id", "phase_id", "epic_id", "key", "updated_since"}},
 		{"POST", "/v1/projects/{id}/tickets", "Tickets", "Crear ticket", "TicketCreate", "Ticket", nil},
 		{"GET", "/v1/tickets/{id}", "Tickets", "Obtener ticket por UUID, PREFIX-N o key", "", "Ticket", nil},
 		{"PATCH", "/v1/tickets/{id}", "Tickets", "Editar ticket con versión", "TicketUpdate", "Ticket", nil},
@@ -162,10 +162,10 @@ func openAPIOperations() []opDef {
 		{"POST", "/v1/messages/{id}/handoff/aceptar", "Mensajes", "Aceptar handoff", "", "Message", nil},
 		{"POST", "/v1/messages/{id}/handoff/rechazar", "Mensajes", "Rechazar handoff", "", "Message", nil},
 
-		{"GET", "/v1/projects/{id}/documents", "Documentos", "Listar docs de proyecto + globales", "", "DocumentList", []string{"limit", "cursor"}},
+		{"GET", "/v1/projects/{id}/documents", "Documentos", "Listar docs de proyecto + globales", "", "DocumentList", []string{"limit", "cursor", "updated_since"}},
 		{"POST", "/v1/projects/{id}/documents", "Documentos", "Crear documento de proyecto", "DocumentCreate", "Document", nil},
 		{"POST", "/v1/projects/{id}/documents/sync", "Documentos", "Sincronizar docs de proyecto", "DocumentSync", "SyncResult", nil},
-		{"GET", "/v1/documents", "Documentos", "Listar docs globales", "", "DocumentList", []string{"limit", "cursor"}},
+		{"GET", "/v1/documents", "Documentos", "Listar docs globales", "", "DocumentList", []string{"limit", "cursor", "updated_since"}},
 		{"POST", "/v1/documents", "Documentos", "Crear documento global (admin)", "DocumentCreate", "Document", nil},
 		{"POST", "/v1/documents/sync", "Documentos", "Sincronizar docs globales (admin)", "DocumentSync", "SyncResult", nil},
 		{"GET", "/v1/documents/{id}", "Documentos", "Obtener documento/versión", "", "Document", []string{"version"}},
@@ -180,6 +180,7 @@ func openAPIOperations() []opDef {
 		{"GET", "/v1/projects/{id}/digest", "Búsqueda", "Digest del proyecto", "", "FreeObject", nil},
 		{"GET", "/v1/projects/{id}/tablero", "Búsqueda", "Tablero fases→épicas→tickets", "", "FreeObject", nil},
 		{"GET", "/v1/novedades", "Búsqueda", "Long-poll de novedades", "", "Novedades", []string{"since", "wait"}},
+		{"GET", "/v1/changes", "Búsqueda", "Feed incremental de objetos cambiados", "", "Changes", []string{"since", "project_id", "limit"}},
 
 		{"GET", "/v1/audit/chains", "Auditoría", "Listar cadenas", "", "ChainList", nil},
 		{"GET", "/v1/audit", "Auditoría", "Consultar eventos", "", "AuditList", []string{"chain_id", "actor_id", "action", "object_type", "object_id", "project_id", "from", "to", "limit", "cursor"}},

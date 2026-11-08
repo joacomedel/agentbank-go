@@ -154,6 +154,20 @@ func (s *Server) handleDispatchOutbox(w http.ResponseWriter, r *http.Request, id
 	s.writeJSON(w, http.StatusOK, map[string]any{"entregados": delivered})
 }
 
+func (s *Server) handleChanges(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	limit, err := parseLimit(r)
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	result, err := s.svc.Changes(r.Context(), identity, r.URL.Query().Get("since"), r.URL.Query().Get("project_id"), limit)
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) handleNovedades(w http.ResponseWriter, r *http.Request, identity service.Identity) {
 	wait, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("wait")))
 	result, err := s.svc.Novedades(r.Context(), identity, r.URL.Query().Get("since"), wait)

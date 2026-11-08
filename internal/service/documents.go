@@ -198,7 +198,7 @@ func (s *Service) GetDocument(ctx context.Context, actor Identity, ref string, v
 }
 
 // ListDocuments lista documentos de proyecto + globales, o solo globales.
-func (s *Service) ListDocuments(ctx context.Context, actor Identity, projectRef string, limit int, cursor string) ([]DocumentView, string, error) {
+func (s *Service) ListDocuments(ctx context.Context, actor Identity, projectRef string, limit int, cursor, updatedSince string) ([]DocumentView, string, error) {
 	rights, err := s.loadRights(ctx, s.db, actor.Participant)
 	if err != nil {
 		return nil, "", err
@@ -222,17 +222,38 @@ func (s *Service) ListDocuments(ctx context.Context, actor Identity, projectRef 
 	} else {
 		conditions = append(conditions, "d.project_id IS NULL")
 	}
-	if cursor != "" {
+	incremental := strings.TrimSpace(updatedSince) != ""
+	if incremental {
+		since, err := timefmt.ParseFlexible(updatedSince)
+		if err != nil {
+			return nil, "", validation("updated_since inválido")
+		}
+		if cursor != "" {
+			createdAt, lastID, err := decodeAuditCursor(cursor)
+			if err != nil {
+				return nil, "", validation("cursor inválido")
+			}
+			conditions = append(conditions, "(d.updated_at > ? OR (d.updated_at = ? AND d.id > ?))")
+			args = append(args, createdAt, createdAt, lastID)
+		} else {
+			conditions = append(conditions, "d.updated_at >= ?")
+			args = append(args, timefmt.Format(since))
+		}
+	} else if cursor != "" {
 		conditions = append(conditions, "d.updated_at < ?")
 		args = append(args, cursor)
 	}
 	args = append(args, limit+1)
+	order := "d.updated_at DESC, d.id DESC"
+	if incremental {
+		order = "d.updated_at ASC, d.id ASC"
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT d.id, COALESCE(d.project_id, ''), d.title, COALESCE(d.route, ''), d.type,
 		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_at, d.updated_at
 		FROM documents d
 		WHERE `+strings.Join(conditions, " AND ")+`
-		ORDER BY d.updated_at DESC, d.id DESC
+		ORDER BY `+order+`
 		LIMIT ?`, args...)
 	if err != nil {
 		return nil, "", fmt.Errorf("listar documentos: %w", err)
@@ -265,7 +286,12 @@ func (s *Service) ListDocuments(ctx context.Context, actor Identity, projectRef 
 	next := ""
 	if len(views) > limit {
 		views = views[:limit]
-		next = timefmt.Format(views[len(views)-1].UpdatedAt)
+		last := views[len(views)-1]
+		if incremental {
+			next = encodeAuditCursor(timefmt.Format(last.UpdatedAt), last.ID)
+		} else {
+			next = timefmt.Format(last.UpdatedAt)
+		}
 	}
 	return views, next, nil
 }

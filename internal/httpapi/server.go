@@ -150,6 +150,7 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux.Handle("GET /v1/projects/{id}/webhooks", s.authenticated(s.handleListWebhooks))
 	mux.Handle("DELETE /v1/webhooks/{id}", s.authenticated(s.handleRemoveWebhook))
 	mux.Handle("GET /v1/novedades", s.authenticated(s.handleNovedades))
+	mux.Handle("GET /v1/changes", s.authenticated(s.handleChanges))
 	mux.Handle("POST /v1/projects/{id}/pausa", s.authenticated(s.handlePauseProject))
 	mux.Handle("POST /v1/projects/{id}/seguir", s.authenticated(s.handleResumeProject))
 

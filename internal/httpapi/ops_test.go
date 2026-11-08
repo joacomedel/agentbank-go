@@ -261,3 +261,26 @@ func TestOpenAPIAndSwaggerExposed(t *testing.T) {
 		t.Fatalf("swagger: status=%d content-type=%q", response.StatusCode, response.Header.Get("Content-Type"))
 	}
 }
+
+func TestChangesFeedHTTP(t *testing.T) {
+	env := newIdentityServer(t)
+	project := env.createProject(t, "changes-http", "Changes HTTP")
+	projectID, _ := project["id"].(string)
+	status, ticket, _ := env.do(t, http.MethodPost, "/v1/projects/"+projectID+"/tickets", env.humanToken, map[string]any{
+		"title": "Ticket nuevo",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("crear ticket: status=%d body=%v", status, ticket)
+	}
+	status, feed, _ := env.do(t, http.MethodGet, "/v1/changes?project_id="+projectID, env.humanToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("changes: status=%d body=%v", status, feed)
+	}
+	items, _ := feed["items"].([]any)
+	if len(items) == 0 {
+		t.Fatalf("feed vacío: %v", feed)
+	}
+	if feed["next_cursor"] == "" {
+		t.Fatalf("sin cursor: %v", feed)
+	}
+}
