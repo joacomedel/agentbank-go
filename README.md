@@ -38,9 +38,10 @@ Etapas 1–6 implementadas (backend HTTP):
 - **Auditoría**: append-only con hash chain por proyecto y `system`, sesión,
   origen, correlación y verificación de integridad.
 
-Faltan las etapas 7–9: CLI, MCP, worker, UI, Telegram, contratos entre
-proyectos y choque de áreas. Ver `docs/rewrite-plan.md`, `docs/scope.md` y
-`docs/api.md`.
+Etapa 7 implementada: CLI Go, MCP por stdio sin perfiles, `init`, config
+`.agentbank.json` y worker básico. Faltan la UI de producto (fuera de este repo),
+Telegram, contratos y choque de áreas. Ver `docs/rewrite-plan.md`,
+`docs/scope.md`, `docs/cli.md`, `docs/mcp.md` y `docs/api.md`.
 
 ## Requisitos
 
@@ -83,6 +84,20 @@ Configuración por entorno:
 go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 ```
 
+## CLI y MCP
+
+```bash
+agentbank init --url http://127.0.0.1:8090 --project API --token 'ab_...'
+agentbank me --project API
+agentbank next --project API --role backend
+agentbank advance --id API-42 --status hecho --nota-cierre "Listo" --y-siguiente
+agentbank mcp
+```
+
+- CLI completa en `docs/cli.md`.
+- MCP por stdio, 73 tools, sin perfiles, en `docs/mcp.md`.
+- Ambos consumen la misma API/OpenAPI.
+
 ## OpenAPI / Swagger
 
 - Spec: `GET /openapi.json` o `GET /v1/openapi.json`.
@@ -100,6 +115,8 @@ go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 - `docs/frontend.md`: guía para el frontend futuro.
 - `docs/mapping.md`: mapa desde el repo TypeScript viejo.
 - `docs/mcp-flows.md`: flujos MCP/CLI y conteo de llamadas.
+- `docs/cli.md`: comandos de la CLI.
+- `docs/mcp.md`: servidor MCP, tools y configuración.
 - `docs/benchmarks.md`: mediciones en el Moto.
 - `docs/deploy.md` y `deploy/`: systemd, límites y backup.
 - `docs/decisions/`: ADRs.

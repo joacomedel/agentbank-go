@@ -12,20 +12,50 @@ import (
 	"time"
 
 	"github.com/joacomedel/agentbank-go/internal/buildinfo"
+	"github.com/joacomedel/agentbank-go/internal/cli"
+	"github.com/joacomedel/agentbank-go/internal/client"
 	"github.com/joacomedel/agentbank-go/internal/config"
 	"github.com/joacomedel/agentbank-go/internal/db"
 	"github.com/joacomedel/agentbank-go/internal/httpapi"
+	"github.com/joacomedel/agentbank-go/internal/mcp"
 	"github.com/joacomedel/agentbank-go/internal/service"
 )
 
 func main() {
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	var err error
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "serve":
+			err = runServer(ctx)
+		case "mcp":
+			err = runMCP(ctx)
+		default:
+			err = cli.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+		}
+	} else {
+		err = runServer(ctx)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "agentbank:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func runMCP(ctx context.Context) error {
+	cfg, err := cli.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if cfg.Token == "" {
+		return errors.New("MCP: falta token; definí AGENTBANK_TOKEN o corré agentbank init --token …")
+	}
+	api := client.New(cfg.URL, cfg.Token, cfg.Project)
+	return mcp.Run(ctx, api, os.Stdin, os.Stdout, os.Stderr, buildinfo.Version)
+}
+
+func runServer(ctx context.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -34,9 +64,6 @@ func run() error {
 		Level: cfg.LogLevel,
 	}))
 	slog.SetDefault(logger)
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	database, err := db.Open(ctx, cfg.DBPath)
 	if err != nil {

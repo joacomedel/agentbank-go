@@ -76,10 +76,14 @@ documentada.
 - Catálogo de acciones de auditoría, sesión/origen y verificación global.
 - `docs/api.md` y `docs/frontend.md` actualizados.
 
-### Fase 7 — CLI y MCP (pendiente)
+### Fase 7 — CLI y MCP — ✅ implementada
 
-- CLI Go: `init`, `participante`, `import`, `docs`, `worker`, `telegram`.
-- MCP con perfiles `esencial`, `worker`, `completo`.
+- CLI Go: `init`, `me`, `changes`, `next`, `advance`, `inbox`, `resolve`,
+  `project`, `phase`, `epic`, `doc`, `import`, `audit`, `admin`, `worker` y
+  `api` como escape hatch.
+- MCP por stdio con 73 tools, sin perfiles y `api_request`.
+- Worker básico con ejecutor `cmd`/`simulado`, heartbeat y liberación.
+- Pendiente: ejecutor `opencode-server` y `--worktree`.
 
 ### Fase 8 — UI (fuera de este repo)
 
