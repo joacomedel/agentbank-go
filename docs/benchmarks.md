@@ -28,6 +28,19 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
 abort térmico de 58 °C.
 
+## Feed incremental y `updated_since` (2026-11-08)
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |
+|---|---|---:|---:|---:|---:|
+| `fmt` | `20261108T010251Z-1b9393` | 396 ms | 6.7 MB | 146.2% | 41.0 °C |
+| `vet` | `20261108T010257Z-cb05a4` | 14.18 s | 280.3 MB | 204.9% | 49.3 °C |
+| `test` | `20261108T010316Z-bcd249` | 22.67 s | 158.2 MB | 216.6% | 50.6 °C |
+| `build` | `20261108T010343Z-d5e04e` | 11.55 s | 149.3 MB | 226.5% | 50.0 °C |
+
+Binario devctl: 18,157,955 bytes (~17.3 MiB). Stripped: 12,255,392 bytes
+(~11.7 MiB). Se agregaron `/v1/changes` y `updated_since` en tickets/docs para
+evitar listados completos.
+
 ## OpenAPI / Swagger (2026-11-08)
 
 | Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |

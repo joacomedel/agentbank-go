@@ -137,13 +137,14 @@ type TimelineItem struct {
 
 // TicketFilter son filtros de listado.
 type TicketFilter struct {
-	Status     string
-	Priority   string
-	Role       string
-	AssigneeID string
-	PhaseID    string
-	EpicID     string
-	Key        string
+	Status       string
+	Priority     string
+	Role         string
+	AssigneeID   string
+	PhaseID      string
+	EpicID       string
+	Key          string
+	UpdatedSince string
 }
 
 type ticketContext struct {
@@ -396,7 +397,24 @@ func (s *Service) ListTickets(ctx context.Context, actor Identity, projectRef st
 		conditions = append(conditions, "t.key = ?")
 		args = append(args, filter.Key)
 	}
-	if cursor != "" {
+	incremental := strings.TrimSpace(filter.UpdatedSince) != ""
+	if incremental {
+		since, err := timefmt.ParseFlexible(filter.UpdatedSince)
+		if err != nil {
+			return nil, "", validation("updated_since inválido")
+		}
+		if cursor != "" {
+			createdAt, lastID, err := decodeAuditCursor(cursor)
+			if err != nil {
+				return nil, "", validation("cursor inválido")
+			}
+			conditions = append(conditions, "(t.updated_at > ? OR (t.updated_at = ? AND t.id > ?))")
+			args = append(args, createdAt, createdAt, lastID)
+		} else {
+			conditions = append(conditions, "t.updated_at >= ?")
+			args = append(args, timefmt.Format(since))
+		}
+	} else if cursor != "" {
 		number, err := strconv.ParseInt(cursor, 10, 64)
 		if err != nil {
 			return nil, "", validation("cursor inválido")
@@ -405,6 +423,10 @@ func (s *Service) ListTickets(ctx context.Context, actor Identity, projectRef st
 		args = append(args, number)
 	}
 	args = append(args, limit+1)
+	order := "t.number DESC"
+	if incremental {
+		order = "t.updated_at ASC, t.id ASC"
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
@@ -414,7 +436,7 @@ func (s *Service) ListTickets(ctx context.Context, actor Identity, projectRef st
 		FROM tickets t
 		LEFT JOIN epics e ON e.id = t.epic_id
 		WHERE `+strings.Join(conditions, " AND ")+`
-		ORDER BY t.number DESC
+		ORDER BY `+order+`
 		LIMIT ?`, args...)
 	if err != nil {
 		return nil, "", fmt.Errorf("listar tickets: %w", err)
@@ -442,7 +464,12 @@ func (s *Service) ListTickets(ctx context.Context, actor Identity, projectRef st
 	next := ""
 	if len(views) > limit {
 		views = views[:limit]
-		next = strconv.FormatInt(views[len(views)-1].Number, 10)
+		last := views[len(views)-1]
+		if incremental {
+			next = encodeAuditCursor(timefmt.Format(last.UpdatedAt), last.ID)
+		} else {
+			next = strconv.FormatInt(last.Number, 10)
+		}
 	}
 	return views, next, nil
 }

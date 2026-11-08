@@ -49,7 +49,7 @@ Prefijo: `/v1`
 | Mensajes | `POST/GET /v1/messages`, `GET /v1/messages/{id}`, `GET /v1/me/bandeja`, `POST /v1/messages/{id}/estado`, `POST /v1/messages/{id}/visto`, `POST /v1/messages/{id}/acusar`, `POST /v1/messages/{id}/tomar`, `POST /v1/messages/{id}/resolver`, `POST /v1/messages/{id}/responder`, `POST /v1/messages/{id}/descartar`, `POST /v1/messages/{id}/convertir`, `POST /v1/messages/{id}/handoff/aceptar`, `POST /v1/messages/{id}/handoff/rechazar` |
 | Docs | `GET/POST /v1/projects/{id}/documents`, `POST /v1/projects/{id}/documents/sync`, `GET/POST /v1/documents`, `POST /v1/documents/sync`, `GET /v1/documents/{id}`, `POST/GET /v1/documents/{id}/versions`, `GET /v1/documents/{id}/diff` |
 | Decisiones | `GET/POST /v1/projects/{id}/decisions` |
-| Búsqueda/contexto | `GET /v1/search`, `GET /v1/projects/{id}/briefing`, `GET /v1/projects/{id}/digest`, `GET /v1/projects/{id}/tablero`, `GET /v1/novedades` |
+| Búsqueda/contexto | `GET /v1/search`, `GET /v1/projects/{id}/briefing`, `GET /v1/projects/{id}/digest`, `GET /v1/projects/{id}/tablero`, `GET /v1/novedades`, `GET /v1/changes` |
 | Import | `POST /v1/projects/{id}/import` |
 | Auditoría | `GET /v1/audit/chains`, `GET /v1/audit`, `GET /v1/audit/verify`, `POST /v1/admin/verify-all` |
 | Operación | `POST /v1/admin/barridos`, `POST /v1/admin/claims/sin-actividad`, `GET /v1/admin/metrics`, `GET /v1/admin/outbox`, `POST /v1/admin/outbox/despachar`, `GET/POST /v1/projects/{id}/webhooks`, `DELETE /v1/webhooks/{id}` |
@@ -213,6 +213,9 @@ Respuesta `201`:
 
 Filtros: `status`, `priority`, `role`, `assignee_id`, `phase_id`, `epic_id`,
 `key`, `limit`, `cursor`. Orden: más nuevos primero.
+Con `updated_since=<RFC3339>` devuelve solo tickets cambiados desde esa fecha,
+ordenados por `updated_at` ascendente; `next_cursor` sirve para la página
+siguiente sin volver a listar todo.
 
 ### `GET /v1/tickets/{id}`
 
@@ -405,7 +408,8 @@ claims vencidos. Es idempotente.
 
 - `POST /v1/projects/{id}/documents`:
   `{"title":"Arquitectura","route":"docs/arquitectura.md","type":"doc","pinned":true,"content":"# …"}`
-- `GET /v1/projects/{id}/documents`: docs del proyecto + globales.
+- `GET /v1/projects/{id}/documents`: docs del proyecto + globales. Acepta
+  `updated_since=<RFC3339>` para traer solo metadatos de docs cambiados.
 - `POST /v1/documents` y `GET /v1/documents`: docs globales (escritura solo
   admin de instancia; lectura para todos).
 - `GET /v1/documents/{id}?version=N`.
@@ -487,6 +491,34 @@ Verifica todas las cadenas. Solo admin de instancia.
 ### `GET /v1/novedades?since=<cursor>&wait=20`
 
 Long-poll de eventos posteriores al cursor. `wait` máximo 30 s. No muta nada.
+
+### `GET /v1/changes?since=<cursor>&project_id=…&limit=100`
+
+Feed incremental y deduplicado de objetos cambiados: tickets, mensajes, docs,
+fases, épicas, decisiones y participantes. Cada item trae `object_type`,
+`object_id`, `action`, `project_id`, `changed_at` y un `summary` con datos
+básicos (por ejemplo `ref`, `status`, `version` del ticket). Una sola llamada
+alcanza para saber qué cambió; el contenido completo se pide solo para los
+objetos que interesan.
+
+```json
+{
+  "items": [
+    {
+      "object_type": "ticket",
+      "object_id": "…",
+      "action": "ticket.editar",
+      "project_id": "…",
+      "changed_at": "2026-11-08T00:00:00Z",
+      "summary": {"ref":"API-42","title":"…","status":"en curso","version":3,"updated_at":"…"}
+    }
+  ],
+  "next_cursor": "…"
+}
+```
+
+Sin `since`, devuelve los últimos cambios y un cursor para continuar. Ver
+`docs/mcp-flows.md` para los flujos y conteos de llamadas.
 
 ## Operación
 

@@ -32,8 +32,9 @@ Etapas 1–6 implementadas (backend HTTP):
 - **Conocimiento**: documentos versionados con hash y diff, docs globales, sync
   por ruta, decisiones/ADRs, adjuntos a tickets y búsqueda `LIKE`.
 - **Operación**: import JSON con dry-run y ciclos, barridos, heartbeat, pausa,
-  outbox/webhooks, long-poll de novedades, idempotencia, rate limit, escaneo de
-  secretos, métricas y verificación global de auditoría.
+  outbox/webhooks, long-poll de novedades, feed incremental `/v1/changes`,
+  `updated_since` en tickets/docs, idempotencia, rate limit, escaneo de secretos,
+  métricas y verificación global de auditoría.
 - **Auditoría**: append-only con hash chain por proyecto y `system`, sesión,
   origen, correlación y verificación de integridad.
 
@@ -98,6 +99,7 @@ go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 - `docs/api.md`: contrato HTTP.
 - `docs/frontend.md`: guía para el frontend futuro.
 - `docs/mapping.md`: mapa desde el repo TypeScript viejo.
+- `docs/mcp-flows.md`: flujos MCP/CLI y conteo de llamadas.
 - `docs/benchmarks.md`: mediciones en el Moto.
 - `docs/deploy.md` y `deploy/`: systemd, límites y backup.
 - `docs/decisions/`: ADRs.
