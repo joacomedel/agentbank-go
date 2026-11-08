@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joacomedel/agentbank-go/internal/agentruntime"
 	"github.com/joacomedel/agentbank-go/internal/buildinfo"
 	"github.com/joacomedel/agentbank-go/internal/cli"
 	"github.com/joacomedel/agentbank-go/internal/client"
@@ -48,10 +49,21 @@ func runMCP(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if cfg.Token == "" {
-		return errors.New("MCP: falta token; definí AGENTBANK_TOKEN o corré agentbank init --token …")
+	token := cfg.Token
+	if cfg.Agent != "" {
+		result, err := agentruntime.Ensure(ctx, agentruntime.Options{
+			BaseURL: cfg.URL, HumanToken: cfg.HumanToken, Project: cfg.Project,
+			Agent: cfg.Agent, Role: cfg.AgentRole,
+		})
+		if err != nil {
+			return err
+		}
+		token = result.Token
 	}
-	api := client.New(cfg.URL, cfg.Token, cfg.Project)
+	if token == "" {
+		return errors.New("MCP: falta token; corré agentbank login o definí AGENTBANK_TOKEN")
+	}
+	api := client.New(cfg.URL, token, cfg.Project)
 	return mcp.Run(ctx, api, os.Stdin, os.Stdout, os.Stderr, buildinfo.Version)
 }
 

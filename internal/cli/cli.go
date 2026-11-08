@@ -15,14 +15,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joacomedel/agentbank-go/internal/agentruntime"
 	"github.com/joacomedel/agentbank-go/internal/client"
+	"github.com/joacomedel/agentbank-go/internal/credentials"
 )
 
 // Config es la configuración efectiva de la CLI.
 type Config struct {
-	URL     string
-	Token   string
-	Project string
+	URL        string
+	Token      string
+	HumanToken string
+	Project    string
+	Agent      string
+	AgentRole  string
 }
 
 type stringList []string
@@ -47,8 +52,28 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
+	case "login":
+		return runLogin(ctx, cfg, args[1:], stdout, stderr)
 	case "init":
 		return runInit(args[1:], stdout)
+	case "agent":
+		return runAgent(ctx, cfg, args[1:], stdout, stderr)
+	case "worker":
+		return runWorker(ctx, cfg, args[1:], stdout, stderr)
+	}
+	if cfg.Agent != "" && shouldEnsureAgent(args[0]) {
+		result, err := agentruntime.Ensure(ctx, agentruntime.Options{
+			BaseURL: cfg.URL, HumanToken: cfg.HumanToken, Project: cfg.Project,
+			Agent: cfg.Agent, Role: cfg.AgentRole,
+		})
+		if err != nil {
+			return err
+		}
+		cfg.Token = result.Token
+	} else if cfg.Token == "" {
+		cfg.Token = cfg.HumanToken
+	}
+	switch args[0] {
 	case "api":
 		return runAPI(ctx, cfg, args[1:], stdout, stderr)
 	case "me":
@@ -81,10 +106,17 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return runAudit(ctx, cfg, args[1:], stdout, stderr)
 	case "admin":
 		return runAdmin(ctx, cfg, args[1:], stdout, stderr)
-	case "worker":
-		return runWorker(ctx, cfg, args[1:], stdout, stderr)
 	default:
 		return fmt.Errorf("comando desconocido %q; usá agentbank help", args[0])
+	}
+}
+
+func shouldEnsureAgent(command string) bool {
+	switch command {
+	case "login", "init", "agent", "worker", "project", "phase", "epic", "audit", "admin":
+		return false
+	default:
+		return true
 	}
 }
 
@@ -94,7 +126,9 @@ func printUsage(w io.Writer) {
 Uso:
   agentbank serve                 arranca el servidor
   agentbank mcp                   servidor MCP por stdio
-  agentbank init [flags]          escribe .agentbank.json y token local
+  agentbank login [flags]         guarda el token humano (una vez)
+  agentbank init [flags]          escribe .agentbank.json y configuración
+  agentbank agent list|ensure|rotate|revoke|disable
   agentbank api [flags]           llamada HTTP genérica (escape hatch)
   agentbank me                    identidad + briefing
   agentbank changes [flags]       feed incremental
@@ -111,7 +145,7 @@ Uso:
   agentbank import --project ID archivo.json [--dry-run] [--update]
   agentbank audit chains|list|verify
   agentbank admin sweeps|metrics|verify-all|outbox|dispatch
-  agentbank worker [--cmd CMD] [--role R] [--max N]
+  agentbank worker [--agent A] [--cmd CMD] [--role R] [--max N]
 
 Configuración:
   AGENTBANK_URL       default http://127.0.0.1:8090
@@ -128,32 +162,36 @@ func LoadConfig() (Config, error) { return loadConfig() }
 func loadConfig() (Config, error) {
 	cfg := Config{URL: "http://127.0.0.1:8090"}
 	homeConfig := configDir()
-	if raw, err := os.ReadFile(filepath.Join(homeConfig, "config.json")); err == nil {
-		var stored struct {
-			Server  string `json:"server"`
-			Project string `json:"project"`
+	type storedConfig struct {
+		Server    string `json:"server"`
+		Project   string `json:"project"`
+		Agent     string `json:"agent"`
+		AgentRole string `json:"agent_role"`
+	}
+	apply := func(stored storedConfig) {
+		if stored.Server != "" {
+			cfg.URL = stored.Server
 		}
+		if stored.Project != "" {
+			cfg.Project = stored.Project
+		}
+		if stored.Agent != "" {
+			cfg.Agent = stored.Agent
+		}
+		if stored.AgentRole != "" {
+			cfg.AgentRole = stored.AgentRole
+		}
+	}
+	if raw, err := os.ReadFile(filepath.Join(homeConfig, "config.json")); err == nil {
+		var stored storedConfig
 		if json.Unmarshal(raw, &stored) == nil {
-			if stored.Server != "" {
-				cfg.URL = stored.Server
-			}
-			if stored.Project != "" {
-				cfg.Project = stored.Project
-			}
+			apply(stored)
 		}
 	}
 	if raw, err := os.ReadFile(".agentbank.json"); err == nil {
-		var stored struct {
-			Server  string `json:"server"`
-			Project string `json:"project"`
-		}
+		var stored storedConfig
 		if json.Unmarshal(raw, &stored) == nil {
-			if stored.Server != "" {
-				cfg.URL = stored.Server
-			}
-			if stored.Project != "" {
-				cfg.Project = stored.Project
-			}
+			apply(stored)
 		}
 	}
 	if value := strings.TrimSpace(os.Getenv("AGENTBANK_URL")); value != "" {
@@ -162,25 +200,35 @@ func loadConfig() (Config, error) {
 	if value := strings.TrimSpace(os.Getenv("AGENTBANK_PROJECT")); value != "" {
 		cfg.Project = value
 	}
-	if value := strings.TrimSpace(os.Getenv("AGENTBANK_TOKEN")); value != "" {
-		cfg.Token = value
+	if value := strings.TrimSpace(os.Getenv("AGENTBANK_AGENT")); value != "" {
+		cfg.Agent = value
+	}
+	if value := strings.TrimSpace(os.Getenv("AGENTBANK_AGENT_ROLE")); value != "" {
+		cfg.AgentRole = value
+	}
+	if value := strings.TrimSpace(os.Getenv("AGENTBANK_HUMAN_TOKEN")); value != "" {
+		cfg.HumanToken = value
+	} else if value := strings.TrimSpace(os.Getenv("AGENTBANK_TOKEN")); value != "" {
+		cfg.HumanToken = value
 	} else {
-		for _, name := range []string{"token", "humano.token"} {
+		for _, name := range []string{"human.token", "token", "humano.token"} {
 			if raw, err := os.ReadFile(filepath.Join(homeConfig, name)); err == nil {
-				cfg.Token = strings.TrimSpace(string(raw))
+				cfg.HumanToken = strings.TrimSpace(string(raw))
 				break
 			}
+		}
+	}
+	cfg.Token = cfg.HumanToken
+	if cfg.Agent != "" {
+		if token := credentials.ReadToken(credentials.TokenPath(cfg.Agent)); token != "" {
+			cfg.Token = token
 		}
 	}
 	return cfg, nil
 }
 
 func configDir() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return filepath.Join(os.Getenv("HOME"), ".config", "agentbank")
-	}
-	return filepath.Join(dir, "agentbank")
+	return credentials.ConfigDir()
 }
 
 func newClient(cfg Config) *client.Client {
@@ -200,12 +248,17 @@ func runInit(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	urlFlag := fs.String("url", "http://127.0.0.1:8090", "URL del server")
 	project := fs.String("project", "", "slug o id del proyecto")
-	token := fs.String("token", "", "token a guardar en ~/.config/agentbank/token")
-	tokenFile := fs.String("token-file", "", "archivo con el token")
+	token := fs.String("token", "", "token humano a guardar")
+	tokenFile := fs.String("token-file", "", "archivo con el token humano")
+	agent := fs.String("agent", "", "agente por defecto")
+	role := fs.String("role", "", "rol funcional del agente")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	document := map[string]string{"server": *urlFlag, "project": *project}
+	document := map[string]string{
+		"server": *urlFlag, "project": *project,
+		"agent": *agent, "agent_role": *role,
+	}
 	encoded, _ := json.MarshalIndent(document, "", "  ")
 	if err := os.WriteFile(".agentbank.json", append(encoded, '\n'), 0o644); err != nil {
 		return fmt.Errorf("escribir .agentbank.json: %w", err)
@@ -226,8 +279,8 @@ func runInit(args []string, stdout io.Writer) error {
 		tokenValue = strings.TrimSpace(string(raw))
 	}
 	if tokenValue != "" {
-		if err := os.WriteFile(filepath.Join(home, "token"), []byte(tokenValue+"\n"), 0o600); err != nil {
-			return fmt.Errorf("guardar token: %w", err)
+		if err := credentials.WriteToken(credentials.HumanTokenPath(), tokenValue); err != nil {
+			return fmt.Errorf("guardar token humano: %w", err)
 		}
 	}
 	fmt.Fprintln(stdout, "OK: .agentbank.json y configuración local escritos.")
@@ -991,7 +1044,9 @@ func runWorker(ctx context.Context, cfg Config, args []string, stdout, stderr io
 	fs := flag.NewFlagSet("worker", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	project := fs.String("project", cfg.Project, "proyecto")
-	role := fs.String("role", "", "rol")
+	role := fs.String("role", "", "rol de trabajo")
+	agentName := fs.String("agent", cfg.Agent, "nombre del agente")
+	agentRole := fs.String("agent-role", cfg.AgentRole, "rol funcional del agente")
 	command := fs.String("cmd", "", "comando por ticket")
 	max := fs.Int("max", 0, "máximo de tickets (0 = infinito)")
 	sleep := fs.Duration("sleep", 5*time.Second, "espera si no hay tickets")
@@ -1001,6 +1056,22 @@ func runWorker(ctx context.Context, cfg Config, args []string, stdout, stderr io
 	}
 	if *command == "" && !*simulated {
 		return errors.New("falta --cmd o --simulado")
+	}
+	if *agentName != "" {
+		effectiveRole := *agentRole
+		if effectiveRole == "" {
+			effectiveRole = *role
+		}
+		result, err := agentruntime.Ensure(ctx, agentruntime.Options{
+			BaseURL: cfg.URL, HumanToken: cfg.HumanToken, Project: *project,
+			Agent: *agentName, Role: effectiveRole,
+		})
+		if err != nil {
+			return err
+		}
+		cfg.Token = result.Token
+	} else if cfg.Token == "" {
+		cfg.Token = cfg.HumanToken
 	}
 	processed := 0
 	for *max == 0 || processed < *max {
@@ -1096,4 +1167,154 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func runLogin(ctx context.Context, cfg Config, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("login", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	urlFlag := fs.String("url", cfg.URL, "URL del server")
+	token := fs.String("token", "", "token humano")
+	project := fs.String("project", cfg.Project, "proyecto por defecto")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	value := strings.TrimSpace(*token)
+	if value == "" {
+		value = cfg.HumanToken
+	}
+	if value == "" {
+		return errors.New("falta --token o AGENTBANK_TOKEN")
+	}
+	api := client.New(*urlFlag, value, *project)
+	if _, err := api.Do(ctx, "GET", "/v1/me", nil, nil, nil); err != nil {
+		return fmt.Errorf("el token humano no es válido: %w", err)
+	}
+	if err := credentials.WriteToken(credentials.HumanTokenPath(), value); err != nil {
+		return err
+	}
+	home := credentials.ConfigDir()
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return err
+	}
+	document, _ := json.MarshalIndent(map[string]string{"server": *urlFlag, "project": *project}, "", "  ")
+	if err := os.WriteFile(filepath.Join(home, "config.json"), append(document, '\n'), 0o600); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "OK: token humano guardado en ~/.config/agentbank/human.token")
+	return nil
+}
+
+func runAgent(ctx context.Context, cfg Config, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("uso: agentbank agent list|ensure|rotate|revoke|disable")
+	}
+	if cfg.HumanToken == "" {
+		return errors.New("falta token humano; corré agentbank login")
+	}
+	human := client.New(cfg.URL, cfg.HumanToken, cfg.Project)
+	action := args[0]
+	switch action {
+	case "list":
+		fs := flag.NewFlagSet("agent list", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		role := fs.String("role", "", "filtrar por rol")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		query := url.Values{}
+		query.Set("type", "agente")
+		query.Set("limit", "200")
+		if *role != "" {
+			query.Set("role", *role)
+		}
+		result, err := human.Do(ctx, "GET", "/v1/participants", query, nil, nil)
+		if err != nil {
+			return err
+		}
+		return writeJSON(stdout, result)
+	case "ensure":
+		fs := flag.NewFlagSet("agent ensure", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		agent := fs.String("agent", cfg.Agent, "nombre del agente")
+		role := fs.String("role", cfg.AgentRole, "rol funcional")
+		project := fs.String("project", cfg.Project, "proyecto")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		result, err := agentruntime.Ensure(ctx, agentruntime.Options{
+			BaseURL: cfg.URL, HumanToken: cfg.HumanToken, Project: *project,
+			Agent: *agent, Role: *role,
+		})
+		if err != nil {
+			return err
+		}
+		return writeJSON(stdout, result)
+	case "rotate", "revoke", "disable":
+		fs := flag.NewFlagSet("agent "+action, flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		name := fs.String("agent", cfg.Agent, "nombre del agente")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *name == "" {
+			return errors.New("falta --agent")
+		}
+		id, err := agentIDByName(ctx, human, *name)
+		if err != nil {
+			return err
+		}
+		switch action {
+		case "rotate":
+			response, err := human.Do(ctx, "POST", "/v1/participants/"+url.PathEscape(id)+"/tokens", nil, nil, nil)
+			if err != nil {
+				return err
+			}
+			root, _ := response.(map[string]any)
+			token, _ := root["token"].(string)
+			if token == "" {
+				return errors.New("la rotación no devolvió token")
+			}
+			if err := credentials.WriteToken(credentials.TokenPath(*name), token); err != nil {
+				return err
+			}
+			return writeJSON(stdout, map[string]any{"agent": *name, "rotated": true})
+		case "revoke":
+			if _, err := human.Do(ctx, "POST", "/v1/participants/"+url.PathEscape(id)+"/tokens/revoke", nil, nil, nil); err != nil {
+				return err
+			}
+			_ = credentials.RemoveToken(*name)
+			return writeJSON(stdout, map[string]any{"agent": *name, "revoked": true})
+		default:
+			if _, err := human.Do(ctx, "POST", "/v1/participants/"+url.PathEscape(id)+"/baja", nil, nil, nil); err != nil {
+				return err
+			}
+			_ = credentials.RemoveToken(*name)
+			return writeJSON(stdout, map[string]any{"agent": *name, "status": "baja"})
+		}
+	default:
+		return fmt.Errorf("acción desconocida agent %q", action)
+	}
+}
+
+func agentIDByName(ctx context.Context, human *client.Client, name string) (string, error) {
+	query := url.Values{}
+	query.Set("type", "agente")
+	query.Set("name", name)
+	query.Set("limit", "20")
+	response, err := human.Do(ctx, "GET", "/v1/participants", query, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	root, _ := response.(map[string]any)
+	items, _ := root["items"].([]any)
+	for _, raw := range items {
+		item, _ := raw.(map[string]any)
+		if item["name"] == name {
+			id, _ := item["id"].(string)
+			if id != "" {
+				return id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no existe el agente %q", name)
 }

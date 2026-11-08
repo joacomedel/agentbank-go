@@ -711,10 +711,10 @@ func (s *Service) ConvertMessage(ctx context.Context, actor Identity, messageID,
 			ref = fmt.Sprintf("%s-%d", project.Prefix, number)
 			if _, err := tx.ExecContext(ctx, `
 				INSERT INTO tickets
-					(id, project_id, number, title, description, status, priority, created_by, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, 'abierto', 'media', ?, ?, ?)`,
+					(id, project_id, number, title, description, status, priority, created_by, created_by_role, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, 'abierto', 'media', ?, ?, ?, ?)`,
 				ticketID, message.ProjectID, number, title, body, actor.Participant.ID,
-				timefmt.Format(now), timefmt.Format(now),
+				actor.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
 			); err != nil {
 				return fmt.Errorf("crear ticket desde mensaje: %w", err)
 			}
@@ -1029,11 +1029,12 @@ func (s *Service) createCorrectionTicketTx(ctx context.Context, tx *sql.Tx, acto
 	now := s.now().UTC()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO tickets
-			(id, project_id, number, title, description, status, priority, assignee_id, created_by, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, 'abierto', 'alta', ?, ?, ?, ?)`,
+			(id, project_id, number, title, description, status, priority, assignee_id, created_by, created_by_role, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 'abierto', 'alta', ?, ?, ?, ?, ?)`,
 		ticketID, message.ProjectID, number, title,
 		"La respuesta difiere del default asumido para el mensaje "+message.ID,
-		message.FromParticipantID, actor.Participant.ID, timefmt.Format(now), timefmt.Format(now),
+		message.FromParticipantID, actor.Participant.ID, actor.Participant.AgentRole,
+		timefmt.Format(now), timefmt.Format(now),
 	); err != nil {
 		return fmt.Errorf("crear ticket de corrección: %w", err)
 	}

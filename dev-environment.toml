@@ -27,14 +27,14 @@ requires = { tools = ["go"] }
 [tasks.vet]
 kind = "lint"
 weight = "light"
-run = "go vet ./..."
+run = "taskset -c 0 go vet ./..."
 providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
 
 [tasks.test]
 kind = "test"
 weight = "medium"
-run = "go test -count=1 ./..."
+run = "taskset -c 0 go test -count=1 ./..."
 providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
 
@@ -42,14 +42,14 @@ requires = { tools = ["go"] }
 [tasks.test-core]
 kind = "test"
 weight = "light"
-run = "go test -count=1 ./internal/service/... ./internal/httpapi/... ./internal/audit/... ./internal/db/..."
+run = "taskset -c 0 go test -count=1 ./internal/service/... ./internal/httpapi/... ./internal/audit/... ./internal/db/..."
 providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
 
 [tasks.vet-core]
 kind = "lint"
 weight = "light"
-run = "go vet ./internal/service/... ./internal/httpapi/..."
+run = "taskset -c 0 go vet ./internal/service/... ./internal/httpapi/..."
 providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
 
@@ -61,6 +61,20 @@ providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
 artifacts = ["bin/agentbank"]
 publish = true
+
+[tasks.vet-fast]
+kind = "lint"
+weight = "light"
+run = "go vet ./..."
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
+[tasks.test-fast]
+kind = "test"
+weight = "medium"
+run = "go test -count=1 ./..."
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
 
 [tasks.test-race]
 kind = "test"

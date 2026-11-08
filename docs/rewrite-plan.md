@@ -81,7 +81,7 @@ documentada.
 - CLI Go: `init`, `me`, `changes`, `next`, `advance`, `inbox`, `resolve`,
   `project`, `phase`, `epic`, `doc`, `import`, `audit`, `admin`, `worker` y
   `api` como escape hatch.
-- MCP por stdio con 73 tools, sin perfiles y `api_request`.
+- MCP por stdio con 75 tools, sin perfiles y `api_request`.
 - Worker básico con ejecutor `cmd`/`simulado`, heartbeat y liberación.
 - Pendiente: ejecutor `opencode-server` y `--worktree`.
 

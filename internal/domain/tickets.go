@@ -29,25 +29,26 @@ const (
 // Ticket es la unidad de trabajo. Number es correlativo por proyecto y Ref se
 // compone con el prefijo del proyecto.
 type Ticket struct {
-	ID           string
-	ProjectID    string
-	Number       int64
-	Key          string
-	Title        string
-	Description  string
-	Status       string
-	Priority     string
-	AssigneeID   string
-	AssignedRole string
-	PhaseID      string
-	EpicID       string
-	OrderIndex   int64
-	Version      int64
-	Paths        []string
-	DiscoveredIn string
-	CreatedBy    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID            string
+	ProjectID     string
+	Number        int64
+	Key           string
+	Title         string
+	Description   string
+	Status        string
+	Priority      string
+	AssigneeID    string
+	AssignedRole  string
+	PhaseID       string
+	EpicID        string
+	OrderIndex    int64
+	Version       int64
+	Paths         []string
+	DiscoveredIn  string
+	CreatedBy     string
+	CreatedByRole string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Ref devuelve PREFIX-N.

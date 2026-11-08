@@ -32,6 +32,7 @@ type AuditEventView struct {
 	ObjectType    string    `json:"object_type"`
 	ObjectID      string    `json:"object_id,omitempty"`
 	ProjectID     string    `json:"project_id,omitempty"`
+	ActorRole     string    `json:"actor_role,omitempty"`
 	SessionID     string    `json:"session_id,omitempty"`
 	Origin        string    `json:"origin,omitempty"`
 	CorrelationID string    `json:"correlation_id,omitempty"`
@@ -187,8 +188,9 @@ func (s *Service) ListAudit(ctx context.Context, actor Identity, filter AuditFil
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, chain_id, seq, actor_type, COALESCE(actor_id, ''), action,
 		       object_type, COALESCE(object_id, ''), COALESCE(project_id, ''),
-		       COALESCE(session_id, ''), COALESCE(origin, ''), COALESCE(correlation_id, ''),
-		       COALESCE(parent_event_id, ''), payload, prev_hash, hash, created_at
+		       COALESCE(actor_role, ''), COALESCE(session_id, ''), COALESCE(origin, ''),
+		       COALESCE(correlation_id, ''), COALESCE(parent_event_id, ''), payload,
+		       prev_hash, hash, created_at
 		FROM audit_events
 		WHERE `+strings.Join(conditions, " AND ")+`
 		ORDER BY created_at DESC, id DESC
@@ -245,8 +247,9 @@ func scanAuditView(row interface{ Scan(...any) error }) (AuditEventView, error) 
 	var createdAt string
 	if err := row.Scan(&event.ID, &event.ChainID, &event.Seq, &event.ActorType,
 		&event.ActorID, &event.Action, &event.ObjectType, &event.ObjectID,
-		&event.ProjectID, &event.SessionID, &event.Origin, &event.CorrelationID,
-		&event.ParentEventID, &event.Payload, &event.PrevHash, &event.Hash, &createdAt); err != nil {
+		&event.ProjectID, &event.ActorRole, &event.SessionID, &event.Origin,
+		&event.CorrelationID, &event.ParentEventID, &event.Payload, &event.PrevHash,
+		&event.Hash, &createdAt); err != nil {
 		return AuditEventView{}, fmt.Errorf("escanear evento de auditoría: %w", err)
 	}
 	if event.Payload == "" {

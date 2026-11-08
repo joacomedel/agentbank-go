@@ -20,7 +20,8 @@ Etapas 1–6 implementadas (backend HTTP):
 
 - **Identidad**: bootstrap del humano, proyectos, participantes humano/agente,
   membresías, roles por proyecto, tokens hasheados sin expiración, rotación,
-  revocación y baja, sesiones.
+  revocación y baja, sesiones, tokens por agente con auto-enrolamiento y
+  `agent_role` funcional.
 - **Tickets**: CRUD, estados, prioridad, versión, dependencias con detección de
   ciclos, claims con lease, `ticket_siguiente`, comentarios, timeline, IDs
   `PREFIX-N`, `ticket_avanzar` con nota y pregunta.
@@ -95,7 +96,7 @@ agentbank mcp
 ```
 
 - CLI completa en `docs/cli.md`.
-- MCP por stdio, 73 tools, sin perfiles, en `docs/mcp.md`.
+- MCP por stdio, 75 tools, sin perfiles, en `docs/mcp.md`.
 - Ambos consumen la misma API/OpenAPI.
 
 ## OpenAPI / Swagger
@@ -118,6 +119,8 @@ agentbank mcp
 - `docs/handoff.md`: estado y playbook para una sesión nueva.
 - `docs/cli.md`: comandos de la CLI.
 - `docs/mcp.md`: servidor MCP, tools y configuración.
+- `docs/tokens.md`: gestión de token humano y tokens por agente.
+- `scripts/setup-opencode-mcp.py`: login + enrolamiento + config MCP de OpenCode.
 - `docs/benchmarks.md`: mediciones en el Moto.
 - `docs/deploy.md` y `deploy/`: systemd, límites y backup.
 - `docs/decisions/`: ADRs.

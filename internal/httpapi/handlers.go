@@ -14,6 +14,7 @@ type participantJSON struct {
 	Type      string    `json:"type"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
+	AgentRole string    `json:"agent_role,omitempty"`
 	Admin     bool      `json:"admin"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -24,6 +25,7 @@ func toParticipant(participant domain.Participant) participantJSON {
 		Type:      participant.Type,
 		Name:      participant.Name,
 		Status:    participant.Status,
+		AgentRole: participant.AgentRole,
 		Admin:     participant.Admin,
 		CreatedAt: participant.CreatedAt,
 	}
@@ -234,7 +236,11 @@ func (s *Server) handleListParticipants(w http.ResponseWriter, r *http.Request, 
 		s.respondError(w, r, identity, err)
 		return
 	}
-	participants, next, err := s.svc.ListParticipants(r.Context(), limit, r.URL.Query().Get("cursor"), r.URL.Query().Get("activos") == "1")
+	query := r.URL.Query()
+	participants, next, err := s.svc.ListParticipants(
+		r.Context(), limit, query.Get("cursor"), query.Get("activos") == "1",
+		query.Get("type"), query.Get("role"), query.Get("name"),
+	)
 	if err != nil {
 		s.respondError(w, r, identity, err)
 		return
@@ -248,10 +254,11 @@ func (s *Server) handleListParticipants(w http.ResponseWriter, r *http.Request, 
 
 func (s *Server) handleCreateParticipant(w http.ResponseWriter, r *http.Request, identity service.Identity) {
 	var body struct {
-		Name     string `json:"name"`
-		Type     string `json:"type"`
-		Admin    bool   `json:"admin"`
-		Projects []struct {
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		AgentRole string `json:"agent_role"`
+		Admin     bool   `json:"admin"`
+		Projects  []struct {
 			ProjectID  string   `json:"project_id"`
 			Permission string   `json:"permission"`
 			Roles      []string `json:"roles"`
@@ -261,7 +268,7 @@ func (s *Server) handleCreateParticipant(w http.ResponseWriter, r *http.Request,
 		s.writeError(w, http.StatusBadRequest, "invalid_json", "body JSON inválido: "+err.Error())
 		return
 	}
-	input := service.ParticipantInput{Name: body.Name, Type: body.Type, Admin: body.Admin}
+	input := service.ParticipantInput{Name: body.Name, Type: body.Type, AgentRole: body.AgentRole, Admin: body.Admin}
 	for _, project := range body.Projects {
 		input.Projects = append(input.Projects, service.ParticipantProjectInput{
 			ProjectID:  project.ProjectID,
@@ -287,6 +294,30 @@ func (s *Server) handleDisableParticipant(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "status": "baja"})
+}
+
+func (s *Server) handleUpdateParticipant(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	var body struct {
+		AgentRole string `json:"agent_role"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid_json", "body JSON inválido: "+err.Error())
+		return
+	}
+	participant, err := s.svc.UpdateParticipant(r.Context(), identity, r.PathValue("id"), body.AgentRole)
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, toParticipant(participant))
+}
+
+func (s *Server) handleRevokeParticipantToken(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	if err := s.svc.RevokeParticipantToken(r.Context(), identity, r.PathValue("id")); err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"revoked": true})
 }
 
 func (s *Server) handleRotateToken(w http.ResponseWriter, r *http.Request, identity service.Identity) {

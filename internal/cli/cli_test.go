@@ -90,7 +90,7 @@ func TestInitWritesConfigWithoutSecrets(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(old) })
 	t.Setenv("XDG_CONFIG_HOME", configDir)
 	var out bytes.Buffer
-	if err := cli.Run(context.Background(), []string{"init", "--url", "http://127.0.0.1:9999", "--project", "API", "--token", "ab_secreto_de_prueba_0123456789abcdef"}, &out, io.Discard); err != nil {
+	if err := cli.Run(context.Background(), []string{"init", "--url", "http://127.0.0.1:9999", "--project", "API", "--agent", "orquestador-1", "--role", "orquestador", "--token", "ab_secreto_de_prueba_0123456789abcdef"}, &out, io.Discard); err != nil {
 		t.Fatalf("init: %v", err)
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, ".agentbank.json"))
@@ -100,15 +100,40 @@ func TestInitWritesConfigWithoutSecrets(t *testing.T) {
 	if strings.Contains(string(raw), "ab_secreto") {
 		t.Fatal(".agentbank.json contiene el token")
 	}
-	if !strings.Contains(string(raw), `"project": "API"`) {
+	if !strings.Contains(string(raw), `"project": "API"`) || !strings.Contains(string(raw), `"agent": "orquestador-1"`) || !strings.Contains(string(raw), `"agent_role": "orquestador"`) {
 		t.Fatalf(".agentbank.json inesperado: %s", raw)
 	}
-	tokenPath := filepath.Join(configDir, "agentbank", "token")
+	tokenPath := filepath.Join(configDir, "agentbank", "human.token")
 	token, err := os.ReadFile(tokenPath)
 	if err != nil {
 		t.Fatalf("leer token: %v", err)
 	}
 	if !strings.Contains(string(token), "ab_secreto") {
 		t.Fatalf("token no guardado: %s", token)
+	}
+}
+
+func TestLoginStoresHumanToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer human-token" {
+			t.Errorf("authorization=%q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"participant":{"id":"h1","name":"humano","type":"humano"},"memberships":[]}`)
+	}))
+	defer server.Close()
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	t.Setenv("AGENTBANK_TOKEN", "")
+	w := io.Discard
+	if err := cli.Run(context.Background(), []string{"login", "--url", server.URL, "--token", "human-token", "--project", "API"}, w, io.Discard); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	token, err := os.ReadFile(filepath.Join(configDir, "agentbank", "human.token"))
+	if err != nil {
+		t.Fatalf("leer human.token: %v", err)
+	}
+	if !strings.Contains(string(token), "human-token") {
+		t.Fatalf("token inesperado: %s", token)
 	}
 }

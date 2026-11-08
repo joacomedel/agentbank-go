@@ -36,7 +36,7 @@ El playbook de sesión nueva está en `docs/handoff.md`.
 
 ```bash
 cd /root/pipelineCompilacion
-# loop interno (rápido)
+# loop interno (un core; confiable con el Moto caliente)
 ./bin/devctl run test-core --project /root/agentbank-go
 ./bin/devctl run vet-core  --project /root/agentbank-go
 
@@ -53,6 +53,13 @@ cd /root/pipelineCompilacion
 `devctl run build` usa `-ldflags='-s -w'`, declara `bin/agentbank` como
 artefacto y lo publica en el proyecto (`publish = true`), así no hace falta
 repetir un build stripped a mano.
+
+`vet`/`test` y `vet-core`/`test-core` usan `taskset -c 0` para no abortar por
+temperatura. Si el Moto está frío, `vet-fast`/`test-fast` usan dos núcleos.
+
+Temperatura: `fmt`/`build` arrancan debajo de 54 °C; `lint`/`test` debajo de
+49 °C. Si está más caliente, `devctl` espera hasta 300 s a que baje. Aborta a
+58 °C. No hace falta enfriar a mano entre tareas.
 
 Reportar `run_id`, duración, RAM pico, CPU y temperatura. Si `test-race` no
 corre local, indicar el run de CI que lo cubre.

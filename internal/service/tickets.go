@@ -78,6 +78,7 @@ type TicketView struct {
 	Paths              []string              `json:"paths"`
 	DiscoveredIn       string                `json:"discovered_in,omitempty"`
 	CreatedBy          string                `json:"created_by,omitempty"`
+	CreatedByRole      string                `json:"created_by_role,omitempty"`
 	CreatedAt          time.Time             `json:"created_at"`
 	UpdatedAt          time.Time             `json:"updated_at"`
 	Dependencies       []DependencyView      `json:"dependencies,omitempty"`
@@ -205,21 +206,22 @@ func (s *Service) CreateTicket(ctx context.Context, actor Identity, projectRef s
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		now := s.now().UTC()
 		ticket := domain.Ticket{
-			ID:           id.New(),
-			ProjectID:    project.ID,
-			Key:          key,
-			Title:        title,
-			Description:  input.Description,
-			Status:       status,
-			Priority:     priority,
-			AssigneeID:   strings.TrimSpace(input.AssigneeID),
-			AssignedRole: role,
-			OrderIndex:   input.OrderIndex,
-			Version:      1,
-			Paths:        paths,
-			CreatedBy:    actor.Participant.ID,
-			CreatedAt:    now,
-			UpdatedAt:    now,
+			ID:            id.New(),
+			ProjectID:     project.ID,
+			Key:           key,
+			Title:         title,
+			Description:   input.Description,
+			Status:        status,
+			Priority:      priority,
+			AssigneeID:    strings.TrimSpace(input.AssigneeID),
+			AssignedRole:  role,
+			OrderIndex:    input.OrderIndex,
+			Version:       1,
+			Paths:         paths,
+			CreatedBy:     actor.Participant.ID,
+			CreatedByRole: actor.Participant.AgentRole,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 		if ticket.AssigneeID != "" {
 			if _, err := getParticipant(ctx, tx, ticket.AssigneeID); err != nil {
@@ -286,13 +288,13 @@ func (s *Service) CreateTicket(ctx context.Context, actor Identity, projectRef s
 			INSERT INTO tickets
 				(id, project_id, number, key, title, description, status, priority,
 				 assignee_id, assigned_role, phase_id, epic_id, order_index, version,
-				 paths, discovered_in, created_by, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+				 paths, discovered_in, created_by, created_by_role, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
 			ticket.ID, ticket.ProjectID, ticket.Number, nullable(ticket.Key), ticket.Title,
 			ticket.Description, ticket.Status, ticket.Priority, nullable(ticket.AssigneeID),
 			nullable(ticket.AssignedRole), nullable(ticket.PhaseID), nullable(ticket.EpicID),
 			ticket.OrderIndex, mustJSON(ticket.Paths), nullable(ticket.DiscoveredIn),
-			nullable(ticket.CreatedBy), timefmt.Format(now), timefmt.Format(now),
+			nullable(ticket.CreatedBy), ticket.CreatedByRole, timefmt.Format(now), timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("ticket_key_taken", "ya existe un ticket con esa key")
@@ -431,7 +433,7 @@ func (s *Service) ListTickets(ctx context.Context, actor Identity, projectRef st
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
 		       t.created_at, t.updated_at
 		FROM tickets t
 		LEFT JOIN epics e ON e.id = t.epic_id
@@ -1055,7 +1057,8 @@ func baseTicketView(ticket domain.Ticket, project domain.Project, effective stri
 		AssigneeID: ticket.AssigneeID, AssignedRole: ticket.AssignedRole,
 		PhaseID: ticket.PhaseID, EpicID: ticket.EpicID, OrderIndex: ticket.OrderIndex,
 		Version: ticket.Version, Paths: paths, DiscoveredIn: ticket.DiscoveredIn,
-		CreatedBy: ticket.CreatedBy, CreatedAt: ticket.CreatedAt, UpdatedAt: ticket.UpdatedAt,
+		CreatedBy: ticket.CreatedBy, CreatedByRole: ticket.CreatedByRole,
+		CreatedAt: ticket.CreatedAt, UpdatedAt: ticket.UpdatedAt,
 	}
 }
 
@@ -1134,7 +1137,7 @@ func ticketByID(ctx context.Context, q queryer, ticketID string) (domain.Ticket,
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE id = ?`, ticketID))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1160,7 +1163,7 @@ func resolveTicket(ctx context.Context, q queryer, ref string) (ticketContext, e
 			SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 			       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 			       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-			       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''),
+			       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
 			       t.created_at, t.updated_at
 			FROM tickets t
 			JOIN projects p ON p.id = t.project_id
@@ -1176,7 +1179,7 @@ func resolveTicket(ctx context.Context, q queryer, ref string) (ticketContext, e
 				SELECT id, project_id, number, COALESCE(key, ''), title, description,
 				       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 				       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-				       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''),
+				       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
 				       created_at, updated_at
 				FROM tickets WHERE key = ? LIMIT 2`, ref))
 		}
@@ -1202,7 +1205,7 @@ func scanTicket(row interface{ Scan(...any) error }) (domain.Ticket, error) {
 		&ticket.Description, &ticket.Status, &ticket.Priority, &ticket.AssigneeID,
 		&ticket.AssignedRole, &ticket.PhaseID, &ticket.EpicID, &ticket.OrderIndex,
 		&ticket.Version, &paths, &ticket.DiscoveredIn, &ticket.CreatedBy,
-		&createdAt, &updatedAt,
+		&ticket.CreatedByRole, &createdAt, &updatedAt,
 	); err != nil {
 		return domain.Ticket{}, err
 	}
@@ -1352,17 +1355,18 @@ func dependencyIDs(deps []ticketContext) []string {
 
 func ticketAuditPayload(ticket domain.Ticket) map[string]any {
 	return map[string]any{
-		"title":       ticket.Title,
-		"description": ticket.Description,
-		"status":      ticket.Status,
-		"priority":    ticket.Priority,
-		"assignee_id": ticket.AssigneeID,
-		"role":        ticket.AssignedRole,
-		"phase_id":    ticket.PhaseID,
-		"epic_id":     ticket.EpicID,
-		"order_index": ticket.OrderIndex,
-		"version":     ticket.Version,
-		"paths":       ticket.Paths,
+		"title":           ticket.Title,
+		"description":     ticket.Description,
+		"status":          ticket.Status,
+		"priority":        ticket.Priority,
+		"assignee_id":     ticket.AssigneeID,
+		"role":            ticket.AssignedRole,
+		"phase_id":        ticket.PhaseID,
+		"epic_id":         ticket.EpicID,
+		"order_index":     ticket.OrderIndex,
+		"version":         ticket.Version,
+		"paths":           ticket.Paths,
+		"created_by_role": ticket.CreatedByRole,
 	}
 }
 

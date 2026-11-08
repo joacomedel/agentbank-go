@@ -312,7 +312,7 @@ func candidateQuery(projectIDs []string, actor Identity, rights domain.Rights, i
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
 		       t.created_at, t.updated_at, pr.prefix
 		FROM tickets t
 		JOIN projects pr ON pr.id = t.project_id
@@ -372,7 +372,7 @@ func scanTicketWithPrefix(row interface{ Scan(...any) error }) (domain.Ticket, s
 		&ticket.Description, &ticket.Status, &ticket.Priority, &ticket.AssigneeID,
 		&ticket.AssignedRole, &ticket.PhaseID, &ticket.EpicID, &ticket.OrderIndex,
 		&ticket.Version, &paths, &ticket.DiscoveredIn, &ticket.CreatedBy,
-		&createdAt, &updatedAt, &prefix,
+		&ticket.CreatedByRole, &createdAt, &updatedAt, &prefix,
 	); err != nil {
 		return domain.Ticket{}, "", err
 	}

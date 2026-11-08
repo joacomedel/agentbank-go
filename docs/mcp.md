@@ -1,7 +1,7 @@
 # MCP — AgentBank Go
 
 Servidor MCP por stdio, sin perfiles. Expone todas las tools disponibles y un
-escape hatch `api_request`.
+escape hatch `api_request`. Cada agente se auto-enrola con su propio token.
 
 ## Arranque
 
@@ -13,13 +13,15 @@ Configuración por entorno:
 
 ```bash
 export AGENTBANK_URL=http://127.0.0.1:8090
-export AGENTBANK_TOKEN=ab_...
 export AGENTBANK_PROJECT=API
+export AGENTBANK_AGENT=opencode-main
+export AGENTBANK_AGENT_ROLE=orquestador
 agentbank mcp
 ```
 
-También lee `~/.config/agentbank/token` y `.agentbank.json` de la misma forma
-que la CLI. No hay secretos en `.agentbank.json`.
+También lee `~/.config/agentbank/config.json`, `.agentbank.json` y los tokens
+locales. Si el token del agente no existe, lo crea con
+`~/.config/agentbank/human.token`. No hay secretos en `.agentbank.json`.
 
 ## Configuración en OpenCode
 
@@ -31,7 +33,8 @@ que la CLI. No hay secretos en `.agentbank.json`.
       "command": ["/usr/local/bin/agentbank", "mcp"],
       "environment": {
         "AGENTBANK_URL": "http://127.0.0.1:8090",
-        "AGENTBANK_TOKEN": "ab_...",
+        "AGENTBANK_AGENT": "opencode-main",
+        "AGENTBANK_AGENT_ROLE": "orquestador",
         "AGENTBANK_PROJECT": "API"
       }
     }
@@ -39,7 +42,18 @@ que la CLI. No hay secretos en `.agentbank.json`.
 }
 ```
 
-El token va en la configuración local del cliente, nunca en el repo.
+El token humano se guarda una vez con `agentbank login`; el MCP no lo recibe.
+Cada agente usa `tokens/<agente>.token`.
+
+Para configurarlo automáticamente:
+
+```bash
+AGENTBANK_TOKEN='ab_...' scripts/setup-opencode-mcp.py \
+  --project API --agent opencode-main --role orquestador
+```
+
+El script hace login, enrola el agente y escribe la entrada `mcp.agentbank` en
+`~/.config/opencode/opencode.json` sin tokens.
 
 ## Protocolo
 
@@ -51,10 +65,11 @@ El token va en la configuración local del cliente, nunca en el repo.
 
 ## Tools
 
-Hay **73 tools**, sin filtro por perfil. Categorías:
+Hay **75 tools**, sin filtro por perfil. Categorías:
 
 - Identidad: `me`, `participants_list`, `participant_create`,
-  `participant_token`, `participant_disable`, `token_revoke`.
+  `participant_update`, `participant_token`, `participant_revoke_token`,
+  `participant_disable`, `token_revoke`.
 - Proyectos y membresías: `projects_list`, `project_create`, `project_get`,
   `project_edit`, `project_pause`, `project_resume`, `members_list`,
   `member_set`, `member_remove`, `roles_list`.
@@ -81,7 +96,8 @@ Hay **73 tools**, sin filtro por perfil. Categorías:
 
 `tools/list` devuelve `inputSchema` por tool. Los argumentos de path se toman
 del nombre (`id`, `participant_id`, `depends_on`). Si falta `id` o `project_id`
-y hay `AGENTBANK_PROJECT`, se usa como fallback.
+y hay `AGENTBANK_PROJECT`, se usa como fallback. `participant_create` acepta
+`agent_role` (auditor, orquestador, backend, etc.).
 
 ## Flujos con pocas llamadas
 

@@ -347,12 +347,12 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 				if _, err := tx.ExecContext(ctx, `
 					INSERT INTO tickets
 						(id, project_id, number, key, title, description, status, priority,
-						 assigned_role, phase_id, epic_id, order_index, version, paths, created_by, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+						 assigned_role, phase_id, epic_id, order_index, version, paths, created_by, created_by_role, created_at, updated_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
 					ticketID, project.ID, nextNumber, nullable(key), title, ticket.Description,
 					status, priority, nullable(role), nullable(phaseID), nullable(epicID),
 					int64Value(ticket.OrderIndex), mustJSON(paths), actor.Participant.ID,
-					timefmt.Format(now), timefmt.Format(now),
+					actor.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
 				); err != nil {
 					return fmt.Errorf("importar ticket: %w", err)
 				}
@@ -477,7 +477,7 @@ func ticketByKey(ctx context.Context, q queryer, projectID, key string) (domain.
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE project_id = ? AND key = ?`, projectID, key))
 }

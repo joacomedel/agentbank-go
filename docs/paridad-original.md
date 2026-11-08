@@ -40,11 +40,11 @@ pendientes (etapas 7–9). SQLite reemplaza a Postgres por decisión de ADR 0001
 | 26 | Convertir/corregir respuestas | ✅ |
 | 27 | Trazas | ✅ cierre, descubierto, timeline; menciones `@rol` pendientes |
 | 28 | UI tablero/bandeja | ➖ Fuera de este repo; se construye contra OpenAPI |
-| 29 | Participantes/membresías | ✅ |
+| 29 | Participantes/membresías | ✅ tokens por agente, auto-enrolamiento y `agent_role` |
 | 30 | Red de seguridad | ✅ en lo implementado: strict JSON, 409, D20 |
 | 31 | Telegram | ⬜ Etapa 9 |
 | 32 | Runner de workers | 🟡 Worker básico `cmd`/`simulado`; falta OpenCode/worktree |
-| 33 | Init / `.agentbank.json` | ✅ |
+| 33 | Init / `.agentbank.json` | ✅ incluye `agent`/`agent_role` y auto-enrolamiento |
 | 34 | IDs cortos | ✅ `PREFIX-N` |
 
 ## Endpoints
