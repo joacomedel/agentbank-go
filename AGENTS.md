@@ -226,16 +226,26 @@ go vet ./...
 go test ./...
 
 # build
-go build -trimpath -o bin/agentbank ./cmd/agentbank
+go build -trimpath -ldflags="-s -w" -o bin/agentbank ./cmd/agentbank
 ```
 
 Con `devctl`:
 
 ```bash
 cd /root/pipelineCompilacion
-./bin/devctl run test --project /root/agentbank-go
+# loop interno
+./bin/devctl run test-core --project /root/agentbank-go
+./bin/devctl run vet-core  --project /root/agentbank-go
+# cierre de etapa
+./bin/devctl run fmt   --project /root/agentbank-go
+./bin/devctl run vet   --project /root/agentbank-go
+./bin/devctl run test  --project /root/agentbank-go
 ./bin/devctl run build --project /root/agentbank-go
+./bin/devctl metrics --last 10 --project /root/agentbank-go
 ```
+
+El proyecto define `state_dir = /var/tmp/devctl-agentbank` y el `build`
+publica `bin/agentbank` como artefacto en el repo.
 
 ## 15. Prohibiciones
 

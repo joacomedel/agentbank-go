@@ -1,6 +1,7 @@
 [project]
 name = "agentbank-go"
 default_policy = "auto"
+state_dir = "/var/tmp/devctl-agentbank"
 
 [env]
 PATH = "/opt/go/bin:/usr/local/bin:/usr/bin:/bin"
@@ -11,7 +12,7 @@ GOMAXPROCS = "2"
 CGO_ENABLED = "0"
 
 [limits]
-memory_max = "1G"
+memory_max = "512M"
 cpu_quota = "200%"
 timeout = "300s"
 max_parallel = 1
@@ -37,12 +38,29 @@ run = "go test -count=1 ./..."
 providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
 
+# Loop interno: paquetes que cambian más seguido.
+[tasks.test-core]
+kind = "test"
+weight = "light"
+run = "go test -count=1 ./internal/service/... ./internal/httpapi/... ./internal/audit/... ./internal/db/..."
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
+[tasks.vet-core]
+kind = "lint"
+weight = "light"
+run = "go vet ./internal/service/... ./internal/httpapi/..."
+providers = ["local", "pc", "ci"]
+requires = { tools = ["go"] }
+
 [tasks.build]
 kind = "build"
 weight = "medium"
-run = "mkdir -p bin && go build -trimpath -o bin/agentbank ./cmd/agentbank"
+run = "mkdir -p bin && go build -trimpath -ldflags='-s -w' -o bin/agentbank ./cmd/agentbank"
 providers = ["local", "pc", "ci"]
 requires = { tools = ["go"] }
+artifacts = ["bin/agentbank"]
+publish = true
 
 [tasks.test-race]
 kind = "test"
