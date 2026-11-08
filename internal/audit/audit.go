@@ -18,8 +18,10 @@ import (
 
 // Actor es quién produjo el evento. El ID sale del token, nunca del body.
 type Actor struct {
-	Type string
-	ID   string
+	Type      string
+	ID        string
+	SessionID string
+	Origin    string
 }
 
 // Event es un evento ya persistido.
@@ -41,14 +43,18 @@ type Event struct {
 
 // Input describe un evento a agregar. Payload se serializa a JSON canónico.
 type Input struct {
-	ChainID    string
-	Actor      Actor
-	Action     string
-	ObjectType string
-	ObjectID   string
-	ProjectID  string
-	Payload    any
-	CreatedAt  time.Time
+	ChainID       string
+	Actor         Actor
+	Action        string
+	ObjectType    string
+	ObjectID      string
+	ProjectID     string
+	Payload       any
+	SessionID     string
+	Origin        string
+	CorrelationID string
+	ParentEventID string
+	CreatedAt     time.Time
 }
 
 // VerifyResult es el resultado de verificar una cadena.
@@ -76,6 +82,9 @@ func Append(ctx context.Context, tx *sql.Tx, input Input) (Event, error) {
 	}
 	if input.Actor.Type == "" {
 		return Event{}, fmt.Errorf("audit: actor_type vacío")
+	}
+	if err := validateAction(input.Action); err != nil {
+		return Event{}, err
 	}
 	if input.CreatedAt.IsZero() {
 		return Event{}, fmt.Errorf("audit: created_at vacío")
@@ -117,11 +126,15 @@ func Append(ctx context.Context, tx *sql.Tx, input Input) (Event, error) {
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO audit_events
 			(id, chain_id, seq, actor_id, actor_type, action, object_type,
-			 object_id, project_id, payload, prev_hash, hash, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 object_id, project_id, payload, prev_hash, hash, created_at,
+			 session_id, origin, correlation_id, parent_event_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		event.ID, event.ChainID, event.Seq, nullable(event.ActorID), event.ActorType,
 		event.Action, event.ObjectType, nullable(event.ObjectID), nullable(event.ProjectID),
 		event.Payload, event.PrevHash, event.Hash, timefmt.Format(event.CreatedAt),
+		nullable(firstNonEmpty(input.SessionID, input.Actor.SessionID)),
+		nullable(firstNonEmpty(input.Origin, input.Actor.Origin)),
+		nullable(input.CorrelationID), nullable(input.ParentEventID),
 	); err != nil {
 		return Event{}, fmt.Errorf("audit: insertar evento: %w", err)
 	}
@@ -278,4 +291,13 @@ func nullable(value string) any {
 		return nil
 	}
 	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

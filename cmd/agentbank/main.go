@@ -55,6 +55,8 @@ func run() error {
 		logger.Info("bootstrap: participante humano creado", "participant_id", bootstrap.ParticipantID)
 	}
 
+	go service.New(database, nil).RunOutboxLoop(ctx, time.Minute)
+
 	handler := httpapi.New(database, logger, httpapi.Options{
 		MaxBodyBytes: cfg.MaxBodyBytes,
 		Version:      buildinfo.Version,

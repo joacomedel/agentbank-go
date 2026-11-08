@@ -182,16 +182,22 @@ más débil que la política general.
 
 ## 12. Fases
 
-| Fase | Entregable | Criterio de aceptación |
+| Fase | Entregable | Estado |
 |---|---|---|
-| 0 | Scaffold, config, SQLite, migraciones, health/meta, docs base | `go test ./...` verde; servidor responde `/healthz` y `/v1/meta` |
-| 1 | Proyectos, participantes, tokens, sesiones, membresías, auditoría | bootstrap humano, token de agente, `/v1/me`, cadena verificable |
-| 2 | Tickets, dependencias, claims, `ticket_siguiente`, comentarios, timeline | dos agentes no obtienen el mismo ticket; ciclos rechazados |
-| 3 | Fases y épicas | orden fase→épica→ticket; cierre con pendientes |
-| 4 | Mensajes y bandeja | solicitud con opciones/default; `afecta` saca de listo |
-| 5 | Documentos y búsqueda | versiones inmutables con hash; diff; búsqueda |
-| 6 | Contrato final, frontend docs, hardening | OpenAPI/`docs/frontend.md` completos; errores y CORS probados |
-| 7 | systemd, backup, benchmark y despliegue en Moto | RSS/binary/DB dentro del presupuesto |
+| 0 | Scaffold, config, SQLite, migraciones, health/meta, docs base | ✅ |
+| 1 | Proyectos, participantes, tokens, sesiones, membresías, auditoría | ✅ |
+| 2 | Tickets, dependencias, claims, `ticket_siguiente`, comentarios, timeline, IDs cortos | ✅ |
+| 3 | Fases, épicas, briefing, digest, tablero | ✅ |
+| 4 | Mensajes, bandeja, opciones/default, `afecta`, conversión/corrección | ✅ |
+| 5 | Documentos versionados, docs globales, sync, decisiones, búsqueda | ✅ |
+| 6 | Import, barridos, heartbeat, pausa, outbox/webhooks, long-poll, idempotencia, rate limit, secret scanner, métricas | ✅ |
+| 7 | CLI Go, MCP, `init` y runner de workers | ⬜ |
+| 8 | UI tablero/bandeja | ⬜ |
+| 9 | Telegram, contratos, bloqueos/escalado, choque de áreas | ⬜ |
+| 10 | systemd, backup, benchmark y despliegue en Moto | ⬜ |
+
+Detalle y limitaciones: `docs/rewrite-plan.md`, `docs/paridad-original.md` y
+`docs/decisions/0004-fases-2-6.md`.
 
 ## 13. Definition of Done
 

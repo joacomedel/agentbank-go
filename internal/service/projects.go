@@ -106,7 +106,7 @@ func (s *Service) CreateProject(ctx context.Context, actor Identity, input Proje
 		}
 		if _, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    domain.SystemChain,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "proyecto.crear",
 			ObjectType: "proyecto",
 			ObjectID:   view.Project.ID,
@@ -123,7 +123,7 @@ func (s *Service) CreateProject(ctx context.Context, actor Identity, input Proje
 		}
 		if _, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    view.Project.ID,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "membresia.cambiar",
 			ObjectType: "membresia",
 			ObjectID:   actor.Participant.ID,
@@ -219,6 +219,44 @@ func (s *Service) GetProject(ctx context.Context, actor Identity, ref string) (P
 	return ProjectView{Project: project, Permission: permission, Roles: roles}, nil
 }
 
+// SetProjectPaused pausa o reanuda la cola de un proyecto.
+func (s *Service) SetProjectPaused(ctx context.Context, actor Identity, ref string, paused bool) (bool, error) {
+	project, err := resolveProject(ctx, s.db, ref)
+	if err != nil {
+		return false, err
+	}
+	rights, err := s.loadRights(ctx, s.db, actor.Participant)
+	if err != nil {
+		return false, err
+	}
+	if !rights.CanAdmin(project.ID) {
+		return false, forbidden("requires_project_admin", "requiere admin del proyecto", project.ID, "proyecto.pausar", project.ID)
+	}
+	action := "proyecto.seguir"
+	if paused {
+		action = "proyecto.pausar"
+	}
+	err = s.withTx(ctx, func(tx *sql.Tx) error {
+		now := s.now().UTC()
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE projects SET paused = ?, updated_at = ? WHERE id = ?`,
+			boolInt(paused), timefmt.Format(now), project.ID,
+		); err != nil {
+			return fmt.Errorf("actualizar pausa: %w", err)
+		}
+		_, err := audit.Append(ctx, tx, audit.Input{
+			ChainID: project.ID, Actor: auditActor(actor),
+			Action: action, ObjectType: "proyecto", ObjectID: project.ID, ProjectID: project.ID,
+			Payload: map[string]any{"project_id": project.ID, "paused": paused}, CreatedAt: now,
+		})
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+	return paused, nil
+}
+
 // ProjectUpdate permite editar metadatos. Los punteros distinguen ausencia de
 // campo. Cualquier participante autenticado puede editar; el cambio se audita.
 type ProjectUpdate struct {
@@ -302,7 +340,7 @@ func (s *Service) UpdateProject(ctx context.Context, actor Identity, ref string,
 		}
 		if _, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    current.ID,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "proyecto.editar",
 			ObjectType: "proyecto",
 			ObjectID:   current.ID,
@@ -558,7 +596,7 @@ func (s *Service) SetMember(ctx context.Context, actor Identity, ref, participan
 		}
 		if _, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    project.ID,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "membresia.cambiar",
 			ObjectType: "membresia",
 			ObjectID:   participantID,
@@ -634,7 +672,7 @@ func (s *Service) RemoveMember(ctx context.Context, actor Identity, ref, partici
 		}
 		_, err = audit.Append(ctx, tx, audit.Input{
 			ChainID:    project.ID,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "membresia.quitar",
 			ObjectType: "membresia",
 			ObjectID:   participantID,

@@ -40,39 +40,54 @@ documentada.
   `GET /v1/audit`, `GET /v1/audit/verify`.
 - Tests de autoría, permisos, token revocado y cadena alterada.
 
-### Fase 2 — Tickets y cola
+### Fase 2 — Tickets y cola — ✅ implementada
 
 - `tickets`, `ticket_edges`, `claims`, `comments`.
 - Estados y transiciones; `listo` derivado; ciclos rechazados.
 - Claim con lease y heartbeat; `POST /v1/tickets/siguiente` con
   `BEGIN IMMEDIATE` y orden fase→épica→ticket→prioridad→antigüedad.
-- `GET /v1/tickets/{id}`, `GET .../timeline`, comentarios.
+- `GET /v1/tickets/{id}`, `GET .../timeline`, comentarios, `ticket_avanzar`.
 - Tests de concurrencia y de dependencias pendientes.
 
-### Fase 3 — Fases y épicas
+### Fase 3 — Fases y épicas — ✅ implementada
 
 - `phases`, `epics`, orden y fase efectiva.
-- Cierre con pendientes; eventos auditados.
+- Cierre con pendientes; briefing, digest y tablero.
 
-### Fase 4 — Mensajes y bandeja
+### Fase 4 — Mensajes y bandeja — ✅ implementada
 
-- `messages`, `message_affects`, `message_state`.
+- `messages`, `message_affects`, `message_refs`, `message_state`.
 - `info`/`solicitud`, destino participante/rol/proyecto, opciones y default.
-- `GET /v1/me/bandeja`, resolver/descartar, `afecta` saca de listo.
-- Handoff y default automático pueden quedar como deuda explícita.
+- `GET /v1/me/bandeja`, tomar/resolver/descartar, `afecta` saca de listo.
+- Handoff como alias, defaults asumidos, conversión a decisión/ticket y
+  corrección cuando la respuesta difiere del default.
 
-### Fase 5 — Documentos y búsqueda
+### Fase 5 — Documentos y búsqueda — ✅ implementada
 
 - `documents`, `document_versions` con hash y diff.
-- Crear/listar/obtener/versionar; docs globales si el tiempo alcanza.
-- Búsqueda simple con `LIKE` o FTS5 según medición.
+- Docs por proyecto y globales, `ruta`, `fijado`, sync por hash, glosario.
+- Decisiones/ADRs, adjuntos a tickets y búsqueda simple con `LIKE`.
 
-### Fase 6 — Contrato y frontend
+### Fase 6 — Operación y hardening — ✅ implementada
 
-- `docs/api.md` completo, OpenAPI si el contrato se estabiliza.
-- `docs/frontend.md`: auth, pantallas, endpoints, errores, paginación,
-  polling, CORS y ejemplos.
-- Hardening: límites, CORS, rate limit, secret scanner.
+- Import JSON con dry-run, modos y ciclos.
+- Outbox/webhooks, long-poll de novedades, idempotencia, rate limit.
+- Secret scanner, métricas, barridos, heartbeat, pausa.
+- Catálogo de acciones de auditoría, sesión/origen y verificación global.
+- `docs/api.md` y `docs/frontend.md` actualizados.
+
+### Fase 7 — CLI y MCP (pendiente)
+
+- CLI Go: `init`, `participante`, `import`, `docs`, `worker`, `telegram`.
+- MCP con perfiles `esencial`, `worker`, `completo`.
+
+### Fase 8 — UI (pendiente)
+
+- Tablero, bandeja, identidad y alerta de cuello de botella.
+
+### Fase 9 — Integraciones P2/P3 (pendiente)
+
+- Telegram, contratos entre proyectos, bloqueos/escalado y choque de áreas.
 
 ### Fase 7 — Moto
 
@@ -95,7 +110,8 @@ documentada.
 | Auditoría | `GET /v1/audit`, `GET /v1/audit/chains`, `GET /v1/audit/verify` |
 
 Los nombres y campos buscan parecerse a la API vieja; las diferencias se
-documentan en `docs/api.md`.
+documentan en `docs/api.md`. Las etapas 1–6 ya están implementadas; CLI, MCP,
+UI y Telegram quedan en las etapas 7–9.
 
 ## Presupuesto
 

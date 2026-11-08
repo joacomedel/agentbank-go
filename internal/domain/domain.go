@@ -20,6 +20,7 @@ type Participant struct {
 	ID        string
 	Type      string
 	Name      string
+	Status    string
 	Admin     bool
 	CreatedAt time.Time
 }

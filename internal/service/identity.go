@@ -231,6 +231,7 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 			ID:        id.New(),
 			Type:      participantType,
 			Name:      name,
+			Status:    "activo",
 			Admin:     input.Admin,
 			CreatedAt: now,
 		}
@@ -259,7 +260,7 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 		}
 		if _, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    domain.SystemChain,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "participante.crear",
 			ObjectType: "participante",
 			ObjectID:   created.Participant.ID,
@@ -277,7 +278,7 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 		}
 		if _, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    domain.SystemChain,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "token.emitir",
 			ObjectType: "token",
 			ObjectID:   created.TokenID,
@@ -314,7 +315,7 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 			}
 			if _, err := audit.Append(ctx, tx, audit.Input{
 				ChainID:    resolved.ID,
-				Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+				Actor:      auditActor(actor),
 				Action:     "membresia.cambiar",
 				ObjectType: "membresia",
 				ObjectID:   created.Participant.ID,
@@ -340,20 +341,27 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 }
 
 // ListParticipants devuelve participantes para usuarios autenticados.
-func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string) ([]domain.Participant, string, error) {
+func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string, activeOnly bool) ([]domain.Participant, string, error) {
 	limit, err := normalizeLimit(limit)
 	if err != nil {
 		return nil, "", err
 	}
 	args := []any{}
-	where := ""
+	conditions := []string{}
+	if activeOnly {
+		conditions = append(conditions, "status = 'activo'")
+	}
 	if cursor != "" {
-		where = "WHERE name > ?"
+		conditions = append(conditions, "name > ?")
 		args = append(args, cursor)
+	}
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, type, name, admin, created_at
+		SELECT id, type, name, status, admin, created_at
 		FROM participants `+where+`
 		ORDER BY name ASC
 		LIMIT ?`, args...)
@@ -378,6 +386,42 @@ func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string
 		next = participants[len(participants)-1].Name
 	}
 	return participants, next, nil
+}
+
+// DisableParticipant da de baja a un participante y revoca sus tokens.
+func (s *Service) DisableParticipant(ctx context.Context, actor Identity, participantID string) error {
+	if !actor.Participant.Admin {
+		return forbidden("requires_instance_admin", "solo el admin de instancia da de baja participantes", "", "participante.baja", participantID)
+	}
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		now := s.now().UTC()
+		result, err := tx.ExecContext(ctx,
+			`UPDATE participants SET status = 'baja' WHERE id = ? AND status = 'activo'`,
+			participantID,
+		)
+		if err != nil {
+			return fmt.Errorf("dar de baja participante: %w", err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("verificar baja: %w", err)
+		}
+		if affected == 0 {
+			return notFound("participant_not_found", "participante no encontrado o ya de baja")
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE tokens SET revoked_at = ? WHERE participant_id = ? AND revoked_at IS NULL`,
+			timefmt.Format(now), participantID,
+		); err != nil {
+			return fmt.Errorf("revocar tokens del participante: %w", err)
+		}
+		_, err = audit.Append(ctx, tx, audit.Input{
+			ChainID: domain.SystemChain, Actor: auditActor(actor),
+			Action: "participante.baja", ObjectType: "participante", ObjectID: participantID,
+			Payload: map[string]any{"participant_id": participantID}, CreatedAt: now,
+		})
+		return err
+	})
 }
 
 // RotateToken revoca el token activo del participante y emite uno nuevo.
@@ -425,7 +469,7 @@ func (s *Service) RotateToken(ctx context.Context, actor Identity, participantID
 		for _, previousID := range previous {
 			if _, err := audit.Append(ctx, tx, audit.Input{
 				ChainID:    domain.SystemChain,
-				Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+				Actor:      auditActor(actor),
 				Action:     "token.revocar",
 				ObjectType: "token",
 				ObjectID:   previousID,
@@ -454,7 +498,7 @@ func (s *Service) RotateToken(ctx context.Context, actor Identity, participantID
 		}
 		_, err = audit.Append(ctx, tx, audit.Input{
 			ChainID:    domain.SystemChain,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "token.emitir",
 			ObjectType: "token",
 			ObjectID:   tokenID,
@@ -515,7 +559,7 @@ func (s *Service) RevokeToken(ctx context.Context, actor Identity, tokenID strin
 		}
 		_, err = audit.Append(ctx, tx, audit.Input{
 			ChainID:    domain.SystemChain,
-			Actor:      audit.Actor{Type: actor.Participant.Type, ID: actor.Participant.ID},
+			Actor:      auditActor(actor),
 			Action:     "token.revocar",
 			ObjectType: "token",
 			ObjectID:   tokenID,

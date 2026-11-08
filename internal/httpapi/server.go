@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/joacomedel/agentbank-go/internal/security"
 	"github.com/joacomedel/agentbank-go/internal/service"
 )
 
@@ -27,6 +28,7 @@ type Server struct {
 	opts           Options
 	svc            *service.Service
 	allowedOrigins map[string]struct{}
+	limiter        *security.Limiter
 }
 
 type contextKey int
@@ -46,6 +48,7 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 		opts:           opts,
 		svc:            service.New(database, opts.Now),
 		allowedOrigins: make(map[string]struct{}, len(opts.CORSOrigins)),
+		limiter:        security.NewLimiter(600),
 	}
 	for _, origin := range opts.CORSOrigins {
 		s.allowedOrigins[origin] = struct{}{}
@@ -67,10 +70,84 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux.Handle("GET /v1/participants", s.authenticated(s.handleListParticipants))
 	mux.Handle("POST /v1/participants", s.authenticated(s.handleCreateParticipant))
 	mux.Handle("POST /v1/participants/{id}/tokens", s.authenticated(s.handleRotateToken))
+	mux.Handle("POST /v1/participants/{id}/baja", s.authenticated(s.handleDisableParticipant))
 	mux.Handle("POST /v1/tokens/{id}/revoke", s.authenticated(s.handleRevokeToken))
 	mux.Handle("GET /v1/audit/chains", s.authenticated(s.handleListChains))
 	mux.Handle("GET /v1/audit", s.authenticated(s.handleListAudit))
 	mux.Handle("GET /v1/audit/verify", s.authenticated(s.handleVerifyChain))
+
+	mux.Handle("GET /v1/projects/{id}/tickets", s.authenticated(s.handleListTickets))
+	mux.Handle("POST /v1/projects/{id}/tickets", s.authenticated(s.handleCreateTicket))
+	mux.Handle("GET /v1/tickets/{id}", s.authenticated(s.handleGetTicket))
+	mux.Handle("PATCH /v1/tickets/{id}", s.authenticated(s.handleUpdateTicket))
+	mux.Handle("POST /v1/tickets/{id}/avanzar", s.authenticated(s.handleAdvanceTicket))
+	mux.Handle("POST /v1/tickets/{id}/claims", s.authenticated(s.handleClaimTicket))
+	mux.Handle("POST /v1/tickets/{id}/claims/release", s.authenticated(s.handleReleaseClaim))
+	mux.Handle("POST /v1/tickets/{id}/comments", s.authenticated(s.handleAddComment))
+	mux.Handle("GET /v1/tickets/{id}/comments", s.authenticated(s.handleListComments))
+	mux.Handle("GET /v1/tickets/{id}/timeline", s.authenticated(s.handleTimeline))
+	mux.Handle("POST /v1/tickets/{id}/dependencies", s.authenticated(s.handleAddDependency))
+	mux.Handle("DELETE /v1/tickets/{id}/dependencies/{depends_on}", s.authenticated(s.handleRemoveDependency))
+	mux.Handle("POST /v1/tickets/siguiente", s.authenticated(s.handleTicketNext))
+	mux.Handle("GET /v1/tickets/listas", s.authenticated(s.handleTicketListas))
+
+	mux.Handle("GET /v1/projects/{id}/phases", s.authenticated(s.handleListPhases))
+	mux.Handle("POST /v1/projects/{id}/phases", s.authenticated(s.handleCreatePhase))
+	mux.Handle("GET /v1/phases/{id}", s.authenticated(s.handleGetPhase))
+	mux.Handle("PATCH /v1/phases/{id}", s.authenticated(s.handleUpdatePhase))
+	mux.Handle("GET /v1/projects/{id}/epics", s.authenticated(s.handleListEpics))
+	mux.Handle("POST /v1/projects/{id}/epics", s.authenticated(s.handleCreateEpic))
+	mux.Handle("GET /v1/epics/{id}", s.authenticated(s.handleGetEpic))
+	mux.Handle("PATCH /v1/epics/{id}", s.authenticated(s.handleUpdateEpic))
+
+	mux.Handle("POST /v1/projects/{id}/documents", s.authenticated(s.handleCreateProjectDocument))
+	mux.Handle("GET /v1/projects/{id}/documents", s.authenticated(s.handleListProjectDocuments))
+	mux.Handle("POST /v1/projects/{id}/documents/sync", s.authenticated(s.handleSyncProjectDocuments))
+	mux.Handle("POST /v1/documents", s.authenticated(s.handleCreateGlobalDocument))
+	mux.Handle("GET /v1/documents", s.authenticated(s.handleListGlobalDocuments))
+	mux.Handle("POST /v1/documents/sync", s.authenticated(s.handleSyncGlobalDocuments))
+	mux.Handle("GET /v1/documents/{id}", s.authenticated(s.handleGetDocument))
+	mux.Handle("POST /v1/documents/{id}/versions", s.authenticated(s.handleCreateDocumentVersion))
+	mux.Handle("GET /v1/documents/{id}/versions", s.authenticated(s.handleListDocumentVersions))
+	mux.Handle("GET /v1/documents/{id}/diff", s.authenticated(s.handleDiffDocument))
+	mux.Handle("POST /v1/projects/{id}/decisions", s.authenticated(s.handleCreateDecision))
+	mux.Handle("GET /v1/projects/{id}/decisions", s.authenticated(s.handleListDecisions))
+	mux.Handle("POST /v1/tickets/{id}/documents", s.authenticated(s.handleAttachDocument))
+	mux.Handle("GET /v1/tickets/{id}/documents", s.authenticated(s.handleListTicketDocuments))
+	mux.Handle("GET /v1/search", s.authenticated(s.handleSearch))
+	mux.Handle("GET /v1/projects/{id}/briefing", s.authenticated(s.handleBriefing))
+	mux.Handle("GET /v1/projects/{id}/digest", s.authenticated(s.handleDigest))
+	mux.Handle("GET /v1/projects/{id}/tablero", s.authenticated(s.handleTablero))
+
+	mux.Handle("POST /v1/messages", s.authenticated(s.handleCreateMessage))
+	mux.Handle("GET /v1/messages", s.authenticated(s.handleListMessages))
+	mux.Handle("GET /v1/messages/{id}", s.authenticated(s.handleGetMessage))
+	mux.Handle("GET /v1/me/bandeja", s.authenticated(s.handleInbox))
+	mux.Handle("POST /v1/messages/{id}/estado", s.authenticated(s.handleMessageState))
+	mux.Handle("POST /v1/messages/{id}/visto", s.authenticated(s.handleMessageSeen))
+	mux.Handle("POST /v1/messages/{id}/acusar", s.authenticated(s.handleMessageAck))
+	mux.Handle("POST /v1/messages/{id}/responder", s.authenticated(s.handleResolveMessage))
+	mux.Handle("POST /v1/messages/{id}/handoff/aceptar", s.authenticated(s.handleHandoffAccept))
+	mux.Handle("POST /v1/messages/{id}/handoff/rechazar", s.authenticated(s.handleHandoffReject))
+	mux.Handle("POST /v1/messages/{id}/tomar", s.authenticated(s.handleTakeMessage))
+	mux.Handle("POST /v1/messages/{id}/resolver", s.authenticated(s.handleResolveMessage))
+	mux.Handle("POST /v1/messages/{id}/descartar", s.authenticated(s.handleDiscardMessage))
+	mux.Handle("POST /v1/messages/{id}/convertir", s.authenticated(s.handleConvertMessage))
+
+	mux.Handle("POST /v1/me/heartbeat", s.authenticated(s.handleHeartbeat))
+	mux.Handle("POST /v1/admin/barridos", s.authenticated(s.handleSweeps))
+	mux.Handle("POST /v1/admin/claims/sin-actividad", s.authenticated(s.handleSweeps))
+	mux.Handle("GET /v1/admin/metrics", s.authenticated(s.handleMetrics))
+	mux.Handle("POST /v1/admin/verify-all", s.authenticated(s.handleVerifyAll))
+	mux.Handle("GET /v1/admin/outbox", s.authenticated(s.handleListOutbox))
+	mux.Handle("POST /v1/admin/outbox/despachar", s.authenticated(s.handleDispatchOutbox))
+	mux.Handle("POST /v1/projects/{id}/import", s.authenticated(s.handleImport))
+	mux.Handle("POST /v1/projects/{id}/webhooks", s.authenticated(s.handleCreateWebhook))
+	mux.Handle("GET /v1/projects/{id}/webhooks", s.authenticated(s.handleListWebhooks))
+	mux.Handle("DELETE /v1/webhooks/{id}", s.authenticated(s.handleRemoveWebhook))
+	mux.Handle("GET /v1/novedades", s.authenticated(s.handleNovedades))
+	mux.Handle("POST /v1/projects/{id}/pausa", s.authenticated(s.handlePauseProject))
+	mux.Handle("POST /v1/projects/{id}/seguir", s.authenticated(s.handleResumeProject))
 
 	return s.recoverer(
 		s.requestID(

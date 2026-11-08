@@ -14,13 +14,15 @@ import (
 	"github.com/joacomedel/agentbank-go/internal/auth"
 	"github.com/joacomedel/agentbank-go/internal/domain"
 	"github.com/joacomedel/agentbank-go/internal/id"
+	"github.com/joacomedel/agentbank-go/internal/security"
 	"github.com/joacomedel/agentbank-go/internal/timefmt"
 )
 
 // Service agrupa la base y el reloj inyectable.
 type Service struct {
-	db  *sql.DB
-	now func() time.Time
+	db       *sql.DB
+	now      func() time.Time
+	claimTTL time.Duration
 }
 
 // New crea el servicio. now nil usa time.Now.
@@ -28,7 +30,7 @@ func New(database *sql.DB, now func() time.Time) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{db: database, now: now}
+	return &Service{db: database, now: now, claimTTL: 30 * time.Minute}
 }
 
 // Identity es el resultado de autenticar un token.
@@ -36,11 +38,35 @@ type Identity struct {
 	Participant domain.Participant
 	TokenID     string
 	SessionID   string
+	Origin      string
 }
 
 type queryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func auditActor(identity Identity) audit.Actor {
+	return audit.Actor{
+		Type: identity.Participant.Type, ID: identity.Participant.ID,
+		SessionID: identity.SessionID, Origin: identity.Origin,
+	}
+}
+
+func validateNoSecrets(fields ...string) error {
+	for _, field := range fields {
+		if err := security.ScanSecrets(field); err != nil {
+			return validation("el contenido parece contener un secreto; quitalo antes de guardar")
+		}
+	}
+	return nil
+}
+
+func nullable(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func (s *Service) withTx(ctx context.Context, fn func(*sql.Tx) error) error {
@@ -119,7 +145,7 @@ func scanParticipant(row interface{ Scan(...any) error }) (domain.Participant, e
 	var participant domain.Participant
 	var admin int
 	var createdAt string
-	if err := row.Scan(&participant.ID, &participant.Type, &participant.Name, &admin, &createdAt); err != nil {
+	if err := row.Scan(&participant.ID, &participant.Type, &participant.Name, &participant.Status, &admin, &createdAt); err != nil {
 		return domain.Participant{}, fmt.Errorf("escanear participante: %w", err)
 	}
 	participant.Admin = admin == 1
@@ -153,7 +179,7 @@ func scanProject(row interface{ Scan(...any) error }) (domain.Project, error) {
 
 func getParticipant(ctx context.Context, q queryer, participantID string) (domain.Participant, error) {
 	participant, err := scanParticipant(q.QueryRowContext(ctx, `
-		SELECT id, type, name, admin, created_at FROM participants WHERE id = ?`,
+		SELECT id, type, name, status, admin, created_at FROM participants WHERE id = ?`,
 		participantID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Participant{}, notFound("participant_not_found", "participante no encontrado")
@@ -174,18 +200,19 @@ func (s *Service) Authenticate(ctx context.Context, plainToken string) (Identity
 	var identity Identity
 	var hash string
 	var admin int
+	var status string
 	var revokedAt sql.NullString
 	var createdAt string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT t.id, t.token_hash, t.revoked_at,
-		       p.id, p.type, p.name, p.admin, p.created_at
+		       p.id, p.type, p.name, p.admin, p.status, p.created_at
 		FROM tokens t
 		JOIN participants p ON p.id = t.participant_id
 		WHERE t.token_hash = ?`, computed,
 	).Scan(
 		&identity.TokenID, &hash, &revokedAt,
 		&identity.Participant.ID, &identity.Participant.Type, &identity.Participant.Name,
-		&admin, &createdAt,
+		&admin, &status, &createdAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Identity{}, ErrInvalidToken
@@ -196,7 +223,7 @@ func (s *Service) Authenticate(ctx context.Context, plainToken string) (Identity
 	if !auth.EqualHash(hash, computed) {
 		return Identity{}, ErrInvalidToken
 	}
-	if revokedAt.Valid {
+	if revokedAt.Valid || status != "activo" {
 		return Identity{}, ErrInvalidToken
 	}
 	identity.Participant.Admin = admin == 1
@@ -224,11 +251,8 @@ func (s *Service) OpenSession(ctx context.Context, identity Identity, sessionID,
 		if err != nil {
 			return "", fmt.Errorf("buscar sesión: %w", err)
 		}
-		if _, err := s.db.ExecContext(ctx,
-			`UPDATE sessions SET last_seen_at = ? WHERE id = ?`,
-			timefmt.Format(s.now()), sessionID,
-		); err != nil {
-			return "", fmt.Errorf("actualizar sesión: %w", err)
+		if err := s.touchActivity(ctx, identity.Participant.ID, sessionID, s.now().UTC()); err != nil {
+			return "", err
 		}
 		return sessionID, nil
 	}
@@ -245,9 +269,15 @@ func (s *Service) OpenSession(ctx context.Context, identity Identity, sessionID,
 		); err != nil {
 			return fmt.Errorf("crear sesión: %w", err)
 		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE participants SET last_heartbeat_at = ? WHERE id = ?`,
+			timefmt.Format(now), identity.Participant.ID,
+		); err != nil {
+			return fmt.Errorf("actualizar heartbeat: %w", err)
+		}
 		_, err := audit.Append(ctx, tx, audit.Input{
 			ChainID:    domain.SystemChain,
-			Actor:      audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID},
+			Actor:      auditActor(identity),
 			Action:     "sesion.abrir",
 			ObjectType: "sesion",
 			ObjectID:   created,
@@ -263,6 +293,27 @@ func (s *Service) OpenSession(ctx context.Context, identity Identity, sessionID,
 		return "", err
 	}
 	return created, nil
+}
+
+func (s *Service) touchActivity(ctx context.Context, participantID, sessionID string, now time.Time) error {
+	cutoff := timefmt.Format(now.Add(-time.Minute))
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE participants SET last_heartbeat_at = ?
+		WHERE id = ? AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`,
+		timefmt.Format(now), participantID, cutoff,
+	); err != nil {
+		return fmt.Errorf("actualizar heartbeat: %w", err)
+	}
+	if sessionID != "" {
+		if _, err := s.db.ExecContext(ctx, `
+			UPDATE sessions SET last_seen_at = ?
+			WHERE id = ? AND last_seen_at < ?`,
+			timefmt.Format(now), sessionID, cutoff,
+		); err != nil {
+			return fmt.Errorf("actualizar sesión: %w", err)
+		}
+	}
+	return nil
 }
 
 // AuditRejection registra un rechazo de autenticación o permisos. Nunca
