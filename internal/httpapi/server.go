@@ -57,6 +57,10 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /v1/meta", s.meta)
+	mux.HandleFunc("GET /openapi.json", s.openapi)
+	mux.HandleFunc("GET /v1/openapi.json", s.openapi)
+	mux.HandleFunc("GET /swagger", s.swagger)
+	mux.HandleFunc("GET /docs", s.swagger)
 
 	mux.Handle("GET /v1/me", s.authenticated(s.handleMe))
 	mux.Handle("GET /v1/projects", s.authenticated(s.handleListProjects))
@@ -180,13 +184,9 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
 		"api_version": "v1",
 		"database":    "sqlite",
 		"features": []string{
-			"identity",
-			"projects",
-			"participants",
-			"memberships",
-			"tokens",
-			"sessions",
-			"audit",
+			"identity", "projects", "participants", "memberships", "tokens", "sessions",
+			"tickets", "claims", "phases", "epics", "messages", "documents", "search",
+			"import", "outbox", "webhooks", "audit", "openapi",
 		},
 	})
 }

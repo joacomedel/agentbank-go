@@ -28,6 +28,19 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
 abort térmico de 58 °C.
 
+## OpenAPI / Swagger (2026-11-08)
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |
+|---|---|---:|---:|---:|---:|
+| `fmt` | `20261108T002620Z-624943` | 387 ms | 6.6 MB | 146.1% | 45.1 °C |
+| `vet` | `20261108T002626Z-b5f949` | 13.86 s | 267.6 MB | 204.8% | 51.4 °C |
+| `test` | `20261108T002645Z-db7ff2` | 21.98 s | 163.7 MB | 251.9% | 51.1 °C |
+| `build` | `20261108T002711Z-e688f7` | 7.41 s | 147.9 MB | 196.3% | 49.3 °C |
+
+Binario devctl: 18,150,425 bytes (~17.3 MiB). Stripped: 12,255,392 bytes
+(~11.7 MiB). El spec OpenAPI se genera en memoria y se expone en
+`/openapi.json`; no agrega dependencias.
+
 ## Etapas 2–6 — tickets, mensajes, docs y operación (2026-11-08)
 
 Corrida local con `devctl`, state dir

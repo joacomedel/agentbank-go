@@ -81,9 +81,11 @@ documentada.
 - CLI Go: `init`, `participante`, `import`, `docs`, `worker`, `telegram`.
 - MCP con perfiles `esencial`, `worker`, `completo`.
 
-### Fase 8 — UI (pendiente)
+### Fase 8 — UI (fuera de este repo)
 
-- Tablero, bandeja, identidad y alerta de cuello de botella.
+- El backend expone OpenAPI (`/openapi.json`, `/swagger`).
+- El tablero, la bandeja y la identidad los construye otro equipo contra el
+  contrato HTTP. Este repo no implementa UI de producto.
 
 ### Fase 9 — Integraciones P2/P3 (pendiente)
 

@@ -28,11 +28,19 @@ Prefijo: `/v1`
 {"error":"mensaje legible","code":"codigo_estable"}
 ```
 
+## OpenAPI / Swagger
+
+- `GET /openapi.json` y `GET /v1/openapi.json`: especificación OpenAPI 3.0.3.
+- `GET /swagger` y `GET /docs`: Swagger UI de desarrollo (CDN) que carga
+  `/openapi.json`.
+- La UI de producto no forma parte de este repo; se construye aparte contra el
+  contrato.
+
 ## Estado
 
 | Área | Endpoints |
 |---|---|
-| Salud | `GET /healthz`, `GET /v1/meta` |
+| Salud | `GET /healthz`, `GET /v1/meta`, `GET /openapi.json`, `GET /swagger` |
 | Identidad | `GET /v1/me`, `GET/POST /v1/participants`, `POST /v1/participants/{id}/tokens`, `POST /v1/participants/{id}/baja`, `POST /v1/tokens/{id}/revoke`, `POST /v1/me/heartbeat` |
 | Proyectos | `GET/POST /v1/projects`, `GET/PATCH /v1/projects/{id}`, `POST /v1/projects/{id}/pausa`, `POST /v1/projects/{id}/seguir` |
 | Membresías | `GET /v1/projects/{id}/members`, `PUT/DELETE /v1/projects/{id}/members/{participant_id}`, `GET /v1/projects/{id}/roles` |

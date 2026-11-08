@@ -108,6 +108,9 @@ Todo lo que no esté acá es **deferred**, no se borra en silencio: se anota en
 
 - Base: `http://127.0.0.1:8090` (configurable por `AGENTBANK_ADDR`).
 - Prefijo: `/v1`. Salud: `/healthz`.
+- OpenAPI: `GET /openapi.json` y `GET /v1/openapi.json`; Swagger UI de
+  desarrollo en `GET /swagger` (carga el spec; la UI de producto se construye
+  aparte).
 - Auth: `Authorization: Bearer <token>`; sesión opcional `X-Session-Id`.
 - Content-Type: `application/json; charset=utf-8`.
 - IDs: UUID string. Fechas: RFC3339 UTC.
@@ -192,7 +195,7 @@ más débil que la política general.
 | 5 | Documentos versionados, docs globales, sync, decisiones, búsqueda | ✅ |
 | 6 | Import, barridos, heartbeat, pausa, outbox/webhooks, long-poll, idempotencia, rate limit, secret scanner, métricas | ✅ |
 | 7 | CLI Go, MCP, `init` y runner de workers | ⬜ |
-| 8 | UI tablero/bandeja | ⬜ |
+| 8 | UI tablero/bandeja (fuera de este repo; otro equipo contra OpenAPI) | ➖ |
 | 9 | Telegram, contratos, bloqueos/escalado, choque de áreas | ⬜ |
 | 10 | systemd, backup, benchmark y despliegue en Moto | ⬜ |
 

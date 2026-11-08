@@ -1,9 +1,11 @@
 # Guía para construir el frontend
 
-El backend no incluye UI. Esta guía define cómo un frontend futuro consume la
-API de AgentBank Go. Están implementadas las etapas 1–6 (identidad, tickets,
-fases/épicas, mensajes, documentos, import y operación); UI, CLI, MCP, Telegram
-y contratos entre proyectos son etapas posteriores.
+El backend no incluye UI de producto. Esta guía define cómo un frontend
+externo consume la API de AgentBank Go. La UI se construye aparte contra
+OpenAPI (`GET /openapi.json`, Swagger de desarrollo en `GET /swagger`).
+Están implementadas las etapas 1–6 (identidad, tickets, fases/épicas, mensajes,
+documentos, import y operación); CLI, MCP, Telegram y contratos entre proyectos
+son etapas posteriores.
 
 ## 1. Base y autenticación
 
