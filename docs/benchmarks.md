@@ -28,6 +28,19 @@ Proyecto `/root/agentbank-go`, `default_policy=auto`, una corrida a la vez,
 La temperatura de partida fue 40.2 °C y terminó en 48.8 °C. No se acercó al
 abort térmico de 58 °C.
 
+## CLI y MCP (2026-11-08)
+
+| Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |
+|---|---|---:|---:|---:|---:|
+| `fmt` | `20261108T014644Z-7810b3` | 373 ms | 6.7 MB | 133.9% | 43.8 °C |
+| `vet` | `20261108T014649Z-12183b` | 15.38 s | 271.8 MB | 203.8% | 49.3 °C |
+| `test` | `20261108T014710Z-1ca69e` | 25.04 s | 168.7 MB | 227.5% | 50.0 °C |
+| `build` | `20261108T014739Z-592d39` | 4.19 s | 89.4 MB | 194.3% | 46.2 °C |
+
+Binario devctl: 18,586,890 bytes (~17.7 MiB). Stripped: 12,583,072 bytes
+(~12.0 MiB). La CLI y el MCP comparten el mismo binario que el server; no
+agregan dependencias.
+
 ## Feed incremental y `updated_since` (2026-11-08)
 
 | Tarea | Run ID | Exec | RAM pico | CPU pico | Temp |

@@ -1,0 +1,188 @@
+# CLI — AgentBank Go
+
+La CLI es un cliente fino de la API. No tiene lógica de negocio propia.
+
+## Instalación
+
+```bash
+cd /root/agentbank-go
+go build -trimpath -o bin/agentbank ./cmd/agentbank
+```
+
+El mismo binario arranca el server, la CLI y el MCP:
+
+```bash
+agentbank              # servidor
+agentbank serve        # servidor explícito
+agentbank help         # ayuda
+agentbank mcp          # MCP por stdio
+```
+
+## Configuración
+
+Orden de precedencia:
+
+1. `AGENTBANK_URL`, `AGENTBANK_TOKEN`, `AGENTBANK_PROJECT`.
+2. `.agentbank.json` en el directorio actual (`server`, `project`; sin secretos).
+3. `~/.config/agentbank/config.json` (`server`, `project`).
+4. `~/.config/agentbank/token` o `~/.config/agentbank/humano.token` para el token.
+
+Defaults:
+
+```text
+AGENTBANK_URL=http://127.0.0.1:8090
+```
+
+### `agentbank init`
+
+```bash
+agentbank init \
+  --url http://127.0.0.1:8090 \
+  --project API \
+  --token 'ab_...'
+```
+
+Escribe:
+
+- `.agentbank.json` con `{server, project}` (sin token, apto para git).
+- `~/.config/agentbank/config.json` con `{server, project}`.
+- `~/.config/agentbank/token` con permisos `0600` si se pasa `--token` o
+  `--token-file`.
+
+## Comandos principales
+
+### Identidad y cambios
+
+```bash
+agentbank me
+agentbank me --project API
+agentbank changes --since '<cursor>' --project API
+agentbank novedades --since '<cursor>' --wait 20
+```
+
+### Tickets
+
+```bash
+agentbank next --project API --role backend
+agentbank next --project API --claim=false
+agentbank advance --id API-42 --status hecho --nota-cierre "Qué hice..." --y-siguiente
+agentbank advance --id API-42 --pregunta '{"asunto":"¿Seguimos?","cuerpo":"...","opciones":["sí","no"],"default_opcion":0,"modo":"sigo"}'
+agentbank comment --id API-42 --body "Comentario" --type nota
+```
+
+### Proyectos, fases y épicas
+
+```bash
+agentbank project list
+agentbank project create --slug demo --name "Demo" --prefix DEMO
+agentbank project get --id demo
+agentbank project pause --id demo
+agentbank project resume --id demo
+agentbank project members --id demo
+agentbank project roles --id demo
+
+agentbank phase list --project demo
+agentbank phase create --project demo --key f1 --name "Fase 1"
+agentbank phase get --id <fase>
+agentbank phase edit --id <fase> --status cerrada
+
+agentbank epic list --project demo
+agentbank epic create --project demo --key e1 --title "Auth" --phase <fase>
+agentbank epic edit --id <epica> --status cerrada
+```
+
+### Mensajes
+
+```bash
+agentbank inbox --project API --pending
+agentbank resolve --id <mensaje> --option 0
+agentbank resolve --id <mensaje> --text "respuesta"
+```
+
+Para enviar mensajes con opciones/default se usa `api` o el MCP.
+
+### Documentos
+
+```bash
+agentbank doc list --project API
+agentbank doc list --project API --updated-since 2026-11-08T00:00:00Z
+agentbank doc create --project API --title "Arquitectura" --file docs/arquitectura.md --route docs/arquitectura.md
+agentbank doc get --id <doc>
+agentbank doc version --id <doc> --file docs/arquitectura.md
+agentbank doc versions --id <doc>
+agentbank doc diff --id <doc> --from 1 --to 2
+agentbank doc sync --project API --dir docs
+```
+
+### Import
+
+```bash
+agentbank import --project API plan.json --dry-run
+agentbank import --project API plan.json --update
+```
+
+El archivo es JSON con `fases`, `epicas` y `tickets` (mismo body que
+`POST /v1/projects/{id}/import`).
+
+### Auditoría y administración
+
+```bash
+agentbank audit chains
+agentbank audit list --chain <chain_id> --limit 50
+agentbank audit verify --chain system
+
+agentbank admin sweeps
+agentbank admin metrics
+agentbank admin verify-all
+agentbank admin outbox
+agentbank admin dispatch
+```
+
+### Worker
+
+```bash
+agentbank worker --project API --role backend --cmd 'tu-comando' --max 10
+agentbank worker --project API --simulado --max 1
+```
+
+- Reclama con `ticket_siguiente`.
+- Manda heartbeat mientras el comando corre.
+- Si el comando falla, comenta y libera el claim.
+- Si termina y el ticket sigue en curso, comenta "el agente terminó sin cerrar"
+  y libera el claim.
+- Expone `AGENTBANK_TICKET`, `AGENTBANK_TICKET_ID`, `AGENTBANK_TICKET_REF`,
+  `AGENTBANK_TOKEN`, `AGENTBANK_URL` y `AGENTBANK_PROJECT` al comando hijo.
+- No implementa `opencode-server` ni `--worktree` todavía.
+
+### Escape hatch
+
+Cualquier endpoint se puede llamar con `api`:
+
+```bash
+agentbank api --method GET --path /v1/projects
+agentbank api --method POST --path /v1/messages \
+  --body '{"project_id":"API","type":"info","destination_type":"proyecto","subject":"Hola","body":"..."}'
+agentbank api --method POST --path /v1/tickets/siguiente \
+  --idempotency-key "next-1" --body '{"project_id":"API","claim":true}'
+```
+
+Flags:
+
+- `--method`
+- `--path`
+- `--body` (JSON inline o `@archivo`)
+- `--query k=v` (repetible)
+- `--header k=v` (repetible)
+- `--idempotency-key`
+
+## Salida
+
+Todos los comandos imprimen JSON indentado. Los errores de API salen por stderr
+con `error` y `code`.
+
+## Límites
+
+- El `worker` es básico (`cmd`/`simulado`); no incluye el ejecutor de OpenCode 2
+  ni worktrees.
+- Telegram queda para la etapa 9.
+- La UI de producto no está en este repo.

@@ -43,8 +43,8 @@ pendientes (etapas 7–9). SQLite reemplaza a Postgres por decisión de ADR 0001
 | 29 | Participantes/membresías | ✅ |
 | 30 | Red de seguridad | ✅ en lo implementado: strict JSON, 409, D20 |
 | 31 | Telegram | ⬜ Etapa 9 |
-| 32 | Runner de workers | ⬜ Etapa 7 |
-| 33 | Init / `.agentbank.json` | ⬜ Etapa 7 |
+| 32 | Runner de workers | 🟡 Worker básico `cmd`/`simulado`; falta OpenCode/worktree |
+| 33 | Init / `.agentbank.json` | ✅ |
 | 34 | IDs cortos | ✅ `PREFIX-N` |
 
 ## Endpoints
@@ -65,8 +65,8 @@ archivado.
 - `ticket_avanzar` modo `divido` no crea ticket hijo todavía.
 - Handoff se resuelve como mensaje con texto, sin estructura adicional.
 - Menciones `@rol`/`@participante` en comentarios todavía no generan mensajes.
-- Sin UI de producto (se construye aparte contra OpenAPI), sin CLI/MCP,
-  Telegram ni contratos.
+- Sin UI de producto (se construye aparte contra OpenAPI). CLI/MCP ya existen;
+  faltan Telegram, contratos, choque de áreas y el ejecutor OpenCode del runner.
 
 ## Próximas etapas
 

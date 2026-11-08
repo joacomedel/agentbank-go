@@ -194,7 +194,7 @@ más débil que la política general.
 | 4 | Mensajes, bandeja, opciones/default, `afecta`, conversión/corrección | ✅ |
 | 5 | Documentos versionados, docs globales, sync, decisiones, búsqueda | ✅ |
 | 6 | Import, barridos, heartbeat, pausa, outbox/webhooks, long-poll, idempotencia, rate limit, secret scanner, métricas | ✅ |
-| 7 | CLI Go, MCP, `init` y runner de workers | ⬜ |
+| 7 | CLI Go, MCP sin perfiles, `init` y worker básico | ✅ |
 | 8 | UI tablero/bandeja (fuera de este repo; otro equipo contra OpenAPI) | ➖ |
 | 9 | Telegram, contratos, bloqueos/escalado, choque de áreas | ⬜ |
 | 10 | systemd, backup, benchmark y despliegue en Moto | ⬜ |
