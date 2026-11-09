@@ -49,6 +49,7 @@ Prefijo: `/v1`
 | Mensajes | `POST/GET /v1/messages`, `GET /v1/messages/{id}`, `GET /v1/me/bandeja`, `POST /v1/messages/{id}/estado`, `POST /v1/messages/{id}/visto`, `POST /v1/messages/{id}/acusar`, `POST /v1/messages/{id}/tomar`, `POST /v1/messages/{id}/resolver`, `POST /v1/messages/{id}/responder`, `POST /v1/messages/{id}/descartar`, `POST /v1/messages/{id}/convertir`, `POST /v1/messages/{id}/handoff/aceptar`, `POST /v1/messages/{id}/handoff/rechazar` |
 | Docs | `GET/POST /v1/projects/{id}/documents`, `POST /v1/projects/{id}/documents/sync`, `GET/POST /v1/documents`, `POST /v1/documents/sync`, `GET /v1/documents/{id}`, `POST/GET /v1/documents/{id}/versions`, `GET /v1/documents/{id}/diff` |
 | Decisiones | `GET/POST /v1/projects/{id}/decisions` |
+| Artefactos | `GET/POST /v1/projects/{id}/artifacts`, `POST /v1/projects/{id}/artifacts/sync`, `GET /v1/projects/{id}/artifacts/raw/{path...}`, `DELETE /v1/projects/{id}/artifacts/{artifact_id}`, `GET /v1/artifacts`, `GET /v1/artifacts/{id}` |
 | Búsqueda/contexto | `GET /v1/search`, `GET /v1/projects/{id}/briefing`, `GET /v1/projects/{id}/digest`, `GET /v1/projects/{id}/tablero`, `GET /v1/novedades`, `GET /v1/changes` |
 | Import | `POST /v1/projects/{id}/import` |
 | Auditoría | `GET /v1/audit/chains`, `GET /v1/audit`, `GET /v1/audit/verify`, `POST /v1/admin/verify-all` |
@@ -542,6 +543,30 @@ claims vencidos. Es idempotente.
 
 - `POST /v1/projects/{id}/decisions` con `{"title":"…","body":"…","source_message_id":"…"}`.
 - `GET /v1/projects/{id}/decisions`.
+
+### Artefactos compartidos
+
+Guía completa y convenciones: `docs/artifacts.md`. Son archivos de texto
+legibles por cualquier participante autenticado; publicar requiere ser
+`colaborador`/`admin` del proyecto.
+
+- `POST /v1/projects/{id}/artifacts`:
+  `{"path":"openapi.json","content":"…","content_type":"application/json","source_commit":"abc1234"}`.
+  Crea o versiona solo si el hash cambió; responde `action`
+  (`creado|actualizado|sin_cambios`).
+- `POST /v1/projects/{id}/artifacts/sync`: `{"artifacts":[{…}]}` (1–200).
+- `GET /v1/projects/{id}/artifacts`: metadatos; acepta `limit`, `cursor`,
+  `updated_since`, `path`.
+- `GET /v1/artifacts`: metadatos de toda la instancia (descubrimiento
+  cross-project); acepta además `project_id`.
+- `GET /v1/artifacts/{id}?version=N`: metadatos + `content` + `hash`.
+- `GET /v1/projects/{id}/artifacts/raw/{path...}`: contenido crudo con
+  `Content-Type`, `ETag: "<sha256>"` y `304` si `If-None-Match` coincide.
+  `?version=N` y `?download=1`.
+- `DELETE /v1/projects/{id}/artifacts/{artifact_id}`.
+- Límites: path ≤ 300, contenido ≤ 1 MiB, solo texto UTF-8; escaneo de
+  secretos. Cada publicación se audita como `artefacto.publicar` y cada
+  borrado como `artefacto.eliminar`.
 
 ### `GET /v1/search?q=…&type=ticket,document,message&project_id=…`
 

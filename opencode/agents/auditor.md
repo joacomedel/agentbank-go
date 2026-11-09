@@ -90,6 +90,9 @@ bloquea las tools `agentbank_ticket_*`, `agentbank_message_*` ni
 - [ ] Hay tests nuevos o existentes que cubren el cambio.
 - [ ] `go test`/`go vet` (o el comando del proyecto) pasan en el estado actual.
 - [ ] No hay secretos, tokens ni credenciales en el diff ni en la nota.
+- [ ] Si el cambio toca contrato/API/docs públicas, el artefacto
+      (`openapi.json`, `docs/api.md`) está publicado y su `hash`/`source_commit`
+      coincide con el commit auditado (`artifact_get`/`artifacts_list`).
 - [ ] El ticket no se cerró con dependencias abiertas.
 - [ ] El autor y `actor_role` del cierre son coherentes con el rol asignado.
 - [ ] Si hay PR/commit, existe y coincide con el diff.

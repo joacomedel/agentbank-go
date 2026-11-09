@@ -7,6 +7,8 @@ import "fmt"
 var knownActions = map[string]struct{}{
 	"admin.barridos":               {},
 	"admin.verify_all":             {},
+	"artefacto.eliminar":           {},
+	"artefacto.publicar":           {},
 	"bootstrap.humano":             {},
 	"decision.crear":               {},
 	"documento.crear":              {},

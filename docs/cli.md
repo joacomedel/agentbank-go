@@ -148,6 +148,22 @@ agentbank doc diff --id <doc> --from 1 --to 2
 agentbank doc sync --project API --dir docs
 ```
 
+### Artefactos compartidos
+
+```bash
+agentbank artifact put --project API --path openapi.json --file dist/openapi.json --commit "$(git rev-parse HEAD)"
+agentbank artifact put --project API --path openapi.json --stdin < dist/openapi.json
+agentbank artifact list --project API --updated-since 2026-11-09T00:00:00Z
+agentbank artifact list --all --path openapi.json
+agentbank artifact get --project API --path openapi.json --out /tmp/openapi.json
+agentbank artifact get --project API --path openapi.json --version 2
+agentbank artifact delete --project API --id <uuid>
+```
+
+Los artefactos son legibles por toda la instancia; publicar requiere permiso de
+escritura en el proyecto. Para CI y verificación de frescura ver
+`docs/artifacts.md` y `scripts/publish-artifacts.sh`.
+
 ### Import
 
 ```bash

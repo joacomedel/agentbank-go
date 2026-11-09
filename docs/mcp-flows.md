@@ -166,6 +166,10 @@ llamada.
 | `documento_obtener` | `GET /v1/documents/{id}` | contenido |
 | `documento_version_crear` | `POST /v1/documents/{id}/versions` | versión |
 | `docs_sync` | `POST /v1/projects/{id}/documents/sync` | sync |
+| `artifacts_list` / `artifacts_all` | `GET /v1/projects/{id}/artifacts`, `GET /v1/artifacts` | descubrir artefactos propios o de la instancia |
+| `artifact_publish` / `artifacts_sync` | `POST /v1/projects/{id}/artifacts[/sync]` | publicar contrato/docs |
+| `artifact_get` | `GET /v1/artifacts/{id}` | contenido + hash + versión |
+| `artifact_delete` | `DELETE /v1/projects/{id}/artifacts/{artifact_id}` | retirar artefacto |
 | `buscar` | `GET /v1/search` | búsqueda |
 | `audit_verificar` | `GET /v1/audit/verify` | integridad |
 | `admin_barridos` | `POST /v1/admin/barridos` | claims/defaults |

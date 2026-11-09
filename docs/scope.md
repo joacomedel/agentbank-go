@@ -39,6 +39,8 @@
 - Documentos markdown con versiones inmutables y hash.
 - Diff entre versiones.
 - Búsqueda simple de tickets/documentos/mensajes.
+- Artefactos compartidos de texto (OpenAPI, docs de API, esquemas) con
+  versiones, hash, `source_commit`, `ETag` y lectura cross-project.
 
 ### Auditoría
 - Evento append-only por cambio, con hash chain.

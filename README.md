@@ -32,6 +32,9 @@ Etapas 1–6 implementadas (backend HTTP):
   ticket, corrección y handoff.
 - **Conocimiento**: documentos versionados con hash y diff, docs globales, sync
   por ruta, decisiones/ADRs, adjuntos a tickets y búsqueda `LIKE`.
+- **Artefactos compartidos**: archivos de texto (`openapi.json`, `docs/api.md`,
+  esquemas, `version.json`) publicados por proyecto y legibles desde cualquier
+  otro proyecto, con versiones, hash, `source_commit`, `ETag` y auditoría.
 - **Operación**: import JSON con dry-run y ciclos, barridos, heartbeat, pausa,
   outbox/webhooks, long-poll de novedades, feed incremental `/v1/changes`,
   `updated_since` en tickets/docs, idempotencia, rate limit, escaneo de secretos,
@@ -96,7 +99,7 @@ agentbank mcp
 ```
 
 - CLI completa en `docs/cli.md`.
-- MCP por stdio, 76 tools, sin perfiles, en `docs/mcp.md`.
+- MCP por stdio, 82 tools, sin perfiles, en `docs/mcp.md`.
 - Ambos consumen la misma API/OpenAPI.
 
 ## OpenAPI / Swagger
@@ -114,6 +117,8 @@ agentbank mcp
 - `docs/scope.md`: MVP vs deferred.
 - `docs/api.md`: contrato HTTP.
 - `docs/frontend.md`: guía para el frontend futuro.
+- `docs/artifacts.md`: artefactos compartidos, qué publicar y cómo verificar
+  frescura.
 - `docs/mapping.md`: mapa desde el repo TypeScript viejo.
 - `docs/mcp-flows.md`: flujos MCP/CLI y conteo de llamadas.
 - `docs/handoff.md`: estado y playbook para una sesión nueva.
@@ -123,6 +128,8 @@ agentbank mcp
 - `docs/subagentes.md`: orquestador/implementador/auditor, carriles por épica
   y auditoría de cierres.
 - `scripts/setup-opencode-mcp.py`: login + enrolamiento + config MCP de OpenCode.
+- `scripts/publish-artifacts.sh`: publica o verifica (`--check`) un manifiesto
+  de artefactos; usar en CI para que no queden viejos.
 - `scripts/smoke_agent_tokens.py`: smoke end-to-end de tokens y `agent_role`.
 - `scripts/install-opencode-assets.py`: instala agentes y skills en OpenCode.
 - `docs/benchmarks.md`: mediciones en el Moto.

@@ -69,7 +69,7 @@ usa el `AGENTBANK_TOKEN` que hereda del worker.
 
 ## Tools
 
-Hay **76 tools**, sin filtro por perfil. Categorías:
+Hay **82 tools**, sin filtro por perfil. Categorías:
 
 - Identidad: `me`, `participants_list`, `participant_create`,
   `participant_update`, `participant_token`, `participant_revoke_token`,
@@ -89,6 +89,8 @@ Hay **76 tools**, sin filtro por perfil. Categorías:
   `message_convert`.
 - Documentos: `documents_list`, `document_create`, `document_get`,
   `document_version`, `document_versions`, `document_diff`, `documents_sync`.
+- Artefactos: `artifacts_list`, `artifacts_all`, `artifact_get`,
+  `artifact_publish`, `artifacts_sync`, `artifact_delete`.
 - Decisiones: `decisions_list`, `decision_create`.
 - Contexto y cambios: `changes`, `novedades`, `search`, `briefing`, `digest`,
   `tablero`.
@@ -145,6 +147,14 @@ Detalle en `docs/mcp-flows.md`.
 
 ```json
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"changes","arguments":{"project_id":"API","since":"<cursor>"}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"artifact_publish","arguments":{"id":"API","path":"openapi.json","content":"{\"openapi\":\"3.0.3\"}","content_type":"application/json","source_commit":"abc1234"}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"artifacts_list","arguments":{"id":"API","updated_since":"2026-11-09T00:00:00Z"}}}
 ```
 
 ## Idempotencia

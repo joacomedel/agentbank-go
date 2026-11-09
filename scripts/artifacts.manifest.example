@@ -1,0 +1,10 @@
+# Manifiesto de artefactos compartidos de AgentBank Go.
+# Copiá este archivo a artifacts.manifest y ajustá las rutas.
+#
+# Formato: ruta_publicada<TAB>archivo_local
+# Publicar:   scripts/publish-artifacts.sh <proyecto> artifacts.manifest
+# Verificar:  scripts/publish-artifacts.sh --check <proyecto> artifacts.manifest
+
+openapi.json	dist/openapi.json
+docs/api.md	docs/api.md
+docs/frontend.md	docs/frontend.md

@@ -121,6 +121,14 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux.Handle("GET /v1/projects/{id}/decisions", s.authenticated(s.handleListDecisions))
 	mux.Handle("POST /v1/tickets/{id}/documents", s.authenticated(s.handleAttachDocument))
 	mux.Handle("GET /v1/tickets/{id}/documents", s.authenticated(s.handleListTicketDocuments))
+
+	mux.Handle("POST /v1/projects/{id}/artifacts", s.authenticated(s.handlePublishArtifact))
+	mux.Handle("GET /v1/projects/{id}/artifacts", s.authenticated(s.handleListProjectArtifacts))
+	mux.Handle("POST /v1/projects/{id}/artifacts/sync", s.authenticated(s.handleSyncArtifacts))
+	mux.Handle("GET /v1/projects/{id}/artifacts/raw/{path...}", s.authenticated(s.handleRawArtifact))
+	mux.Handle("DELETE /v1/projects/{id}/artifacts/{artifact_id}", s.authenticated(s.handleDeleteArtifact))
+	mux.Handle("GET /v1/artifacts", s.authenticated(s.handleListArtifacts))
+	mux.Handle("GET /v1/artifacts/{id}", s.authenticated(s.handleGetArtifact))
 	mux.Handle("GET /v1/search", s.authenticated(s.handleSearch))
 	mux.Handle("GET /v1/projects/{id}/briefing", s.authenticated(s.handleBriefing))
 	mux.Handle("GET /v1/projects/{id}/digest", s.authenticated(s.handleDigest))
@@ -189,7 +197,7 @@ func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
 		"database":    "sqlite",
 		"features": []string{
 			"identity", "projects", "participants", "memberships", "tokens", "sessions",
-			"tickets", "claims", "phases", "epics", "messages", "documents", "search",
+			"tickets", "claims", "phases", "epics", "messages", "documents", "artifacts", "search",
 			"import", "outbox", "webhooks", "audit", "openapi",
 		},
 	})

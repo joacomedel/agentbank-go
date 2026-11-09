@@ -9,10 +9,10 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 - Backend Go + SQLite, sin UI de producto.
 - Etapas **0–7 implementadas**: identidad/auditoría, tickets/cola, fases/épicas,
   mensajes, documentos, operación/hardening, CLI/MCP/worker básico.
-- **64 tests** verdes; `devctl fmt`, `vet`, `test` y `build` en verde
+- **67 tests** verdes; `devctl fmt`, `vet`, `test` y `build` en verde
   (2026-11-09).
 - `main` incluye OpenAPI/Swagger, feed incremental `/v1/changes`, CLI y MCP de
-  76 tools sin perfiles, tokens por agente, `agent_role`, snapshots de rol en
+  82 tools sin perfiles, tokens por agente, `agent_role`, snapshots de rol en
   cada creación y subagentes de OpenCode (orquestador/implementador/auditor).
 - Migración `0009_actor_roles_everywhere.sql` verificada sobre una base creada
   con el binario anterior (0008): agrega columnas y rellena `created_by_role`
@@ -34,6 +34,14 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
   `opencode-server`, Telegram, contratos entre proyectos, bloqueos/escalado y
   choque de áreas.
 - La UI se construye **fuera de este repo** contra OpenAPI.
+- **Artefactos compartidos (2026-11-09):** migración
+  `0011_artifacts.sql`; `POST/GET /v1/projects/{id}/artifacts`,
+  `/artifacts/sync`, `/artifacts/raw/{path...}` con `ETag`/`304`,
+  `GET /v1/artifacts` (descubrimiento cross-project), `GET /v1/artifacts/{id}`
+  y `DELETE`. CLI `agentbank artifact put|get|list|delete`, 6 tools MCP y
+  `scripts/publish-artifacts.sh --check` para CI. Los artefactos son legibles
+  por toda la instancia y escribibles por `colaborador`/`admin`; cada
+  publicación queda auditada. Guía: `docs/artifacts.md`.
 
 ## 2. Orden de lectura para un agente nuevo
 
@@ -117,6 +125,9 @@ estaban en `ListTickets`, `ListPhases` y `listTicketsByQuery`.
   desde `bin/agentbank`. Paralo antes de publicar.
 - Los smoke tests deben usar binarios en `/tmp/opencode` y cerrarse al terminar.
 - No dejes servidores de prueba escuchando en `127.0.0.1:1809x`.
+- Los artefactos publicados no se actualizan solos: si tocás el contrato o
+  `docs/api.md`, republicá con `--commit` y corré
+  `scripts/publish-artifacts.sh --check`. El CI debe fallar si quedaron viejos.
 
 ### Mensajes y D20
 
@@ -149,7 +160,11 @@ estaban en `ListTickets`, `ListPhases` y `listTicketsByQuery`.
   El historial de un objeto se consulta con `GET /v1/audit?object_id=<id>`.
 - CLI: `agentbank <comando>`; `agentbank login`, `agentbank init`,
   `agentbank agent list|ensure|rotate|revoke|disable`.
-- MCP: `agentbank mcp`, JSON-RPC por stdio, 76 tools sin perfiles.
+- MCP: `agentbank mcp`, JSON-RPC por stdio, 82 tools sin perfiles.
+- Artefactos compartidos: `agentbank artifact put|get|list|delete` o las tools
+  `artifact_publish`, `artifact_get`, `artifacts_list`, `artifacts_sync`.
+  Publicá `openapi.json` + `docs/api.md` cuando cambie el contrato y verificá
+  con `scripts/publish-artifacts.sh --check`. Guía: `docs/artifacts.md`.
 - Config: `AGENTBANK_URL`, `AGENTBANK_HUMAN_TOKEN`, `AGENTBANK_AGENT`,
   `AGENTBANK_AGENT_ROLE`, `AGENTBANK_PROJECT`, `.agentbank.json` (sin secretos).
 - `agentbank api --method … --path … --body …` es el escape hatch.

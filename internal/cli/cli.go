@@ -104,6 +104,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return runEpic(ctx, cfg, args[1:], stdout, stderr)
 	case "doc":
 		return runDoc(ctx, cfg, args[1:], stdout, stderr)
+	case "artifact":
+		return runArtifact(ctx, cfg, args[1:], stdout, stderr)
 	case "import":
 		return runImport(ctx, cfg, args[1:], stdout, stderr)
 	case "audit":
@@ -147,6 +149,7 @@ Uso:
   agentbank phase list|create|get|edit
   agentbank epic list|create|get|edit
   agentbank doc list|create|get|version|versions|diff|sync
+  agentbank artifact list|get|put|delete
   agentbank import --project ID archivo.json [--dry-run] [--update]
   agentbank audit chains|list|verify
   agentbank admin sweeps|metrics|verify-all|outbox|dispatch
@@ -960,6 +963,133 @@ func runDoc(ctx context.Context, cfg Config, args []string, stdout, stderr io.Wr
 	default:
 		return fmt.Errorf("acción desconocida doc %q", action)
 	}
+}
+
+func runArtifact(ctx context.Context, cfg Config, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("uso: agentbank artifact list|get|put|delete")
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("artifact list", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		project := fs.String("project", cfg.Project, "proyecto")
+		all := fs.Bool("all", false, "listar toda la instancia")
+		updated := fs.String("updated-since", "", "solo cambios")
+		filter := fs.String("path", "", "filtrar por path exacto")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		query := url.Values{}
+		if *updated != "" {
+			query.Set("updated_since", *updated)
+		}
+		if *filter != "" {
+			query.Set("path", *filter)
+		}
+		path := "/v1/projects/" + url.PathEscape(*project) + "/artifacts"
+		if *all {
+			path = "/v1/artifacts"
+		}
+		result, err := newClient(cfg).Do(ctx, "GET", path, query, nil, nil)
+		if err != nil {
+			return err
+		}
+		return writeJSON(stdout, result)
+	case "get":
+		fs := flag.NewFlagSet("artifact get", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		project := fs.String("project", cfg.Project, "proyecto")
+		artifactPath := fs.String("path", "", "path del artefacto")
+		version := fs.String("version", "", "versión")
+		out := fs.String("out", "", "archivo de salida (vacío = stdout)")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *artifactPath == "" {
+			return errors.New("artifact get requiere --path")
+		}
+		query := url.Values{}
+		if *version != "" {
+			query.Set("version", *version)
+		}
+		target := "/v1/projects/" + url.PathEscape(*project) + "/artifacts/raw/" + escapeArtifactPath(*artifactPath)
+		response, err := newClient(cfg).DoRaw(ctx, "GET", target, query, nil)
+		if err != nil {
+			return err
+		}
+		if *out == "" {
+			_, err = stdout.Write(response.Body)
+			return err
+		}
+		return os.WriteFile(*out, response.Body, 0o644)
+	case "put":
+		fs := flag.NewFlagSet("artifact put", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		project := fs.String("project", cfg.Project, "proyecto")
+		artifactPath := fs.String("path", "", "path del artefacto")
+		file := fs.String("file", "", "archivo a publicar")
+		stdin := fs.Bool("stdin", false, "leer contenido de stdin")
+		contentType := fs.String("type", "", "content-type (se infiere por extensión)")
+		commit := fs.String("commit", "", "commit de origen")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *artifactPath == "" || (*file == "" && !*stdin) {
+			return errors.New("artifact put requiere --path y --file o --stdin")
+		}
+		var content []byte
+		var err error
+		if *stdin {
+			content, err = io.ReadAll(os.Stdin)
+		} else {
+			content, err = os.ReadFile(*file)
+		}
+		if err != nil {
+			return err
+		}
+		body := map[string]any{"path": *artifactPath, "content": string(content)}
+		if *contentType != "" {
+			body["content_type"] = *contentType
+		}
+		if *commit != "" {
+			body["source_commit"] = *commit
+		}
+		result, err := newClient(cfg).Do(ctx, "POST", "/v1/projects/"+url.PathEscape(*project)+"/artifacts", nil, body, nil)
+		if err != nil {
+			return err
+		}
+		return writeJSON(stdout, result)
+	case "delete":
+		fs := flag.NewFlagSet("artifact delete", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		project := fs.String("project", cfg.Project, "proyecto")
+		artifactID := fs.String("id", "", "id del artefacto")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *artifactID == "" {
+			return errors.New("artifact delete requiere --id")
+		}
+		result, err := newClient(cfg).Do(ctx, "DELETE", "/v1/projects/"+url.PathEscape(*project)+"/artifacts/"+url.PathEscape(*artifactID), nil, nil, nil)
+		if err != nil {
+			return err
+		}
+		if result == nil {
+			result = map[string]any{"deleted": true}
+		}
+		return writeJSON(stdout, result)
+	default:
+		return fmt.Errorf("acción desconocida artifact %q", args[0])
+	}
+}
+
+func escapeArtifactPath(value string) string {
+	segments := strings.Split(value, "/")
+	for index, segment := range segments {
+		segments[index] = url.PathEscape(segment)
+	}
+	return strings.Join(segments, "/")
 }
 
 func runImport(ctx context.Context, cfg Config, args []string, stdout, stderr io.Writer) error {

@@ -83,9 +83,18 @@ documentada.
 - CLI Go: `init`, `me`, `changes`, `next`, `advance`, `inbox`, `resolve`,
   `project`, `phase`, `epic`, `doc`, `import`, `audit`, `admin`, `worker` y
   `api` como escape hatch.
-- MCP por stdio con 76 tools, sin perfiles y `api_request`.
+- MCP por stdio con 82 tools, sin perfiles y `api_request`.
 - Worker básico con ejecutor `cmd`/`simulado`, heartbeat y liberación.
 - Pendiente: ejecutor `opencode-server` y `--worktree`.
+
+### Artefactos compartidos — ✅ implementado
+
+- Archivos de texto por proyecto, legibles por toda la instancia: `openapi.json`,
+  `docs/api.md`, esquemas y manifiestos.
+- Versiones inmutables con hash, `source_commit`, `ETag`/`304` y auditoría.
+- Descubrimiento con `GET /v1/artifacts?updated_since=…`.
+- CLI/MCP y `scripts/publish-artifacts.sh --check` para verificar frescura en
+  CI. Guía: `docs/artifacts.md`.
 
 ### Fase 8 — UI (fuera de este repo)
 

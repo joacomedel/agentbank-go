@@ -130,6 +130,19 @@ mismo body/path devuelve la respuesta original.
 - `GET /v1/projects/{id}/decisions` para ADRs.
 - Renderizar markdown en el cliente; el backend entrega texto con D20.
 
+### Artefactos
+
+- `GET /v1/artifacts` para descubrir artefactos de toda la instancia (por
+  ejemplo, el `openapi.json` de otro proyecto).
+- `GET /v1/projects/{id}/artifacts` con `updated_since` y `path`.
+- `GET /v1/artifacts/{id}?version=N` para metadatos y contenido.
+- Descargar el crudo con `GET /v1/projects/{id}/artifacts/raw/{path...}`;
+  respetar `ETag` con `If-None-Match` para no bajar contenido sin cambios.
+- Publicar/versionar solo si el usuario escribe en el proyecto; recordar que
+  el artefacto queda legible para toda la instancia.
+- Mostrar `hash`, `version`, `source_commit`, `size_bytes` y `updated_at`.
+  Ver `docs/artifacts.md`.
+
 ### Búsqueda y contexto
 
 - `GET /v1/search?q=…&type=ticket,document,message&project_id=…`.
@@ -174,6 +187,9 @@ mismo body/path devuelve la respuesta original.
   `author_role`.
 - `decision`: `id`, `title`, `status`, `body`, `body_content`,
   `created_by_role`.
+- `artifact`: `id`, `project_id`, `path`, `content_type`, `version`,
+  `current_version`, `hash`, `size_bytes`, `source_commit`, `author_role`,
+  `created_by_role`, `updated_at`.
 - `timeline_item`: `id`, `type`, `author_id`, `author_name`, `actor_role`,
   `session_id`, `action`, `body`, `payload`, `created_at`.
 - `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `actor_role`,

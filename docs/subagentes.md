@@ -291,7 +291,8 @@ La skill `agentbank-audit` tiene el checklist completo.
 Solución: qué se hizo y por qué alcanza.
 Cambios: archivos/módulos tocados.
 Verificación: comando exacto + resultado.
-Artefactos: commit/PR/documento.
+Artefactos: commit/PR + artefacto publicado (ruta, versión, hash, source_commit)
+           o “no aplica” si el ticket no toca contrato/docs públicos.
 Riesgos: pendientes, deuda o “ninguno”.
 ```
 

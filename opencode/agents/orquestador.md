@@ -38,6 +38,9 @@ lo asignás y verificás que se cierre con evidencia.
 4. Creá tickets con `agentbank_ticket_create`:
    - `title` corto y verificable.
    - `description` con contexto, criterio de aceptación y archivos/paths.
+   - Si el ticket toca contrato/API/docs públicas, el criterio incluye
+     republicar `openapi.json`/`docs/api.md` como artefacto con
+     `source_commit` (ver `docs/artifacts.md`).
    - `role` (especialidad: `backend`, `frontend`, `docs`, `test`, `infra`).
    - `requiere_revision: false` solo si el ticket no cambia código (ADR,
      investigación).

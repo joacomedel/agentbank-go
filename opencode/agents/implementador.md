@@ -75,6 +75,11 @@ Pasá el ticket a revisión con `agentbank_ticket_advance`. **No lo cierres en
   una `pregunta` y opciones/default. No cierres “para que siga”.
 - Si el auditor rechaza, el ticket vuelve a `abierto` con `reaperturas + 1`:
   leé el comentario de rechazo y corregí.
+- Si el ticket cambia contrato, API o docs públicas, **republicá el artefacto**
+  antes de cerrar:
+  `agentbank artifact put --project <p> --path openapi.json --file dist/openapi.json --commit <sha>`
+  (y `docs/api.md`). La sección **Artefactos** de la nota debe decir ruta,
+  versión y `source_commit`. Reglas completas en `docs/artifacts.md`.
 - Un ticket sin cambio de código (`requiere_revision: false`) sí puede pasar de
   `en curso` a `hecho` con evidencia completa.
 

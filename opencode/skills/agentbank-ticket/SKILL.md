@@ -55,7 +55,12 @@ tiene.
 - Corré el comando de verificación del proyecto:
   - Go: `gofmt -l .`, `go vet ./...`, `go test ./...`.
   - Otros: el comando que declare el repo.
-- No commitees tokens, `.env`, bases ni artefactos.
+- No commitees tokens, `.env`, bases ni binarios generados. Los artefactos
+  compartidos (openapi, docs) se publican en AgentBank, no se commitean
+  duplicados.
+- Si el cambio toca contrato/API/docs públicas, republicá `openapi.json` y
+  `docs/api.md` con `agentbank artifact put … --commit <sha>` y verificá el
+  hash. Ver `docs/artifacts.md`.
 
 ## 4. Pasar a revisión con evidencia
 
@@ -77,7 +82,8 @@ No cierres en `hecho`: el veredicto lo emite el auditor.
 Solución: qué se hizo y por qué alcanza.
 Cambios: archivos/módulos tocados.
 Verificación: comando exacto + resultado (ej. go test ./... → ok).
-Artefactos: commit/PR/documento (si no hay, “sin PR”).
+Artefactos: commit/PR + artefacto publicado (ruta, versión, hash/source_commit);
+           si no toca contrato/docs públicos, “no aplica”.
 Riesgos: pendientes, deuda o “ninguno”.
 ```
 

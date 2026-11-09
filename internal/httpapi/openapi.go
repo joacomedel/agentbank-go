@@ -75,13 +75,14 @@ func openAPIDocument() map[string]any {
 		"openapi": "3.0.3",
 		"info": map[string]any{
 			"title":       "AgentBank Go API",
-			"version":     "0.2.0",
+			"version":     "0.3.0",
 			"description": "Backend HTTP de AgentBank Go. Sin UI: la UI/Swagger aparte consume este contrato.",
 		},
 		"servers": []map[string]any{{"url": "http://127.0.0.1:8090", "description": "Local"}},
 		"tags": []map[string]any{
 			{"name": "Salud"}, {"name": "Identidad"}, {"name": "Proyectos"}, {"name": "Tickets"},
 			{"name": "Fases"}, {"name": "Épicas"}, {"name": "Mensajes"}, {"name": "Documentos"},
+			{"name": "Artefactos"},
 			{"name": "Búsqueda"}, {"name": "Auditoría"}, {"name": "Operación"},
 		},
 		"components": map[string]any{
@@ -165,8 +166,7 @@ func openAPIOperations() []opDef {
 		{"POST", "/v1/messages/{id}/handoff/aceptar", "Mensajes", "Aceptar handoff", "", "Message", nil},
 		{"POST", "/v1/messages/{id}/handoff/rechazar", "Mensajes", "Rechazar handoff", "", "Message", nil},
 
-		{"GET", "/v1/projects/{id}/documents", "Documentos", "Listar docs de proyecto + globales", "", "DocumentList", []string{"limit", "cursor", "updated_since"}},
-		{"POST", "/v1/projects/{id}/documents", "Documentos", "Crear documento de proyecto", "DocumentCreate", "Document", nil},
+		{"GET", "/v1/projects/{id}/documents", "Documentos", "Listar docs de proyecto + globales", "", "DocumentList", []string{"limit", "cursor", "updated_since"}}, {"POST", "/v1/projects/{id}/documents", "Documentos", "Crear documento de proyecto", "DocumentCreate", "Document", nil},
 		{"POST", "/v1/projects/{id}/documents/sync", "Documentos", "Sincronizar docs de proyecto", "DocumentSync", "SyncResult", nil},
 		{"GET", "/v1/documents", "Documentos", "Listar docs globales", "", "DocumentList", []string{"limit", "cursor", "updated_since"}},
 		{"POST", "/v1/documents", "Documentos", "Crear documento global (admin)", "DocumentCreate", "Document", nil},
@@ -177,6 +177,14 @@ func openAPIOperations() []opDef {
 		{"GET", "/v1/documents/{id}/diff", "Documentos", "Diff entre versiones", "", "FreeObject", []string{"from", "to"}},
 		{"GET", "/v1/projects/{id}/decisions", "Documentos", "Listar decisiones/ADRs", "", "DecisionList", nil},
 		{"POST", "/v1/projects/{id}/decisions", "Documentos", "Crear decisión/ADR", "DecisionCreate", "FreeObject", nil},
+
+		{"GET", "/v1/artifacts", "Artefactos", "Listar artefactos de toda la instancia", "", "ArtifactList", []string{"project_id", "limit", "cursor", "updated_since", "path"}},
+		{"GET", "/v1/artifacts/{id}", "Artefactos", "Obtener artefacto con contenido", "", "Artifact", []string{"version"}},
+		{"GET", "/v1/projects/{id}/artifacts", "Artefactos", "Listar artefactos del proyecto", "", "ArtifactList", []string{"limit", "cursor", "updated_since", "path"}},
+		{"POST", "/v1/projects/{id}/artifacts", "Artefactos", "Publicar o versionar artefacto", "ArtifactPublish", "Artifact", nil},
+		{"POST", "/v1/projects/{id}/artifacts/sync", "Artefactos", "Sincronizar lote de artefactos", "ArtifactSync", "ArtifactSyncResult", nil},
+		{"GET", "/v1/projects/{id}/artifacts/raw/{path...}", "Artefactos", "Descargar contenido crudo con ETag", "", "FreeObject", []string{"version", "download"}},
+		{"DELETE", "/v1/projects/{id}/artifacts/{artifact_id}", "Artefactos", "Eliminar artefacto", "", "FreeObject", nil},
 
 		{"GET", "/v1/search", "Búsqueda", "Buscar tickets/docs/mensajes", "", "SearchList", []string{"q", "type", "project_id", "limit"}},
 		{"GET", "/v1/projects/{id}/briefing", "Búsqueda", "Briefing de arranque", "", "FreeObject", nil},
@@ -220,6 +228,7 @@ func pathParameters(path string) []any {
 			break
 		}
 		name := path[start+1 : start+end]
+		name = strings.TrimSuffix(name, "...")
 		params = append(params, map[string]any{
 			"name": name, "in": "path", "required": true,
 			"schema": map[string]any{"type": "string"},
@@ -325,6 +334,11 @@ func openAPISchemas() map[string]any {
 		"DocumentVersion":     obj(map[string]any{"content": str()}, "content"),
 		"DocumentVersionList": list("Document"),
 		"DocumentSync":        obj(map[string]any{"documents": map[string]any{"type": "array", "items": free}}, "documents"),
+		"Artifact":            obj(map[string]any{"id": str(), "project_id": str(), "path": str(), "content_type": str(), "current_version": intt(), "version": intt(), "hash": str(), "size_bytes": intt(), "source_commit": str(), "author_id": str(), "author_name": str(), "author_role": str(), "created_by_role": str(), "created_at": date(), "updated_at": date(), "content": str(), "action": str()}),
+		"ArtifactList":        list("Artifact"),
+		"ArtifactPublish":     obj(map[string]any{"path": str(), "content": str(), "content_type": str(), "source_commit": str()}, "path", "content"),
+		"ArtifactSync":        obj(map[string]any{"artifacts": map[string]any{"type": "array", "items": free}}, "artifacts"),
+		"ArtifactSyncResult":  obj(map[string]any{"items": map[string]any{"type": "array", "items": free}}),
 		"SyncResult":          obj(map[string]any{"items": map[string]any{"type": "array", "items": free}}),
 		"DecisionCreate":      obj(map[string]any{"title": str(), "body": str(), "source_message_id": str()}, "title", "body"),
 		"DecisionList":        list("FreeObject"),

@@ -61,7 +61,7 @@ Por cada ticket:
 {
   "project_id": "demo",
   "title": "Agregar callback OAuth",
-  "description": "Contexto, criterio de aceptación, paths.",
+  "description": "Contexto, criterio de aceptación, paths. Si toca contrato/API/docs públicas, incluye republicar openapi.json y docs/api.md como artefacto con source_commit.",
   "priority": "alta",
   "role": "backend",
   "requiere_revision": true,

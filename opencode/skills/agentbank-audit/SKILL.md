@@ -61,6 +61,9 @@ Por cada ticket:
 - [ ] El `actor_role` del cierre coincide con el rol asignado o está
       justificado.
 - [ ] El `commit_sha` existe y coincide con el diff del ticket.
+- [ ] Si el cambio toca contrato/API/docs públicas, el artefacto
+      (`openapi.json`, `docs/api.md`) está publicado y su hash/`source_commit`
+      coincide con el commit auditado.
 - [ ] El ticket no se cerró solo con un comentario sin cambio verificable.
 
 ## 4. Veredicto
