@@ -69,7 +69,7 @@ usa el `AGENTBANK_TOKEN` que hereda del worker.
 
 ## Tools
 
-Hay **75 tools**, sin filtro por perfil. Categorías:
+Hay **76 tools**, sin filtro por perfil. Categorías:
 
 - Identidad: `me`, `participants_list`, `participant_create`,
   `participant_update`, `participant_token`, `participant_revoke_token`,

@@ -9,9 +9,10 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 - Backend Go + SQLite, sin UI de producto.
 - Etapas **0–7 implementadas**: identidad/auditoría, tickets/cola, fases/épicas,
   mensajes, documentos, operación/hardening, CLI/MCP/worker básico.
-- **64 tests** verdes.
+- **64 tests** verdes; `devctl fmt`, `vet`, `test` y `build` en verde
+  (2026-11-09).
 - `main` incluye OpenAPI/Swagger, feed incremental `/v1/changes`, CLI y MCP de
-  75 tools sin perfiles, tokens por agente, `agent_role`, snapshots de rol en
+  76 tools sin perfiles, tokens por agente, `agent_role`, snapshots de rol en
   cada creación y subagentes de OpenCode (orquestador/implementador/auditor).
 - Migración `0009_actor_roles_everywhere.sql` verificada sobre una base creada
   con el binario anterior (0008): agrega columnas y rellena `created_by_role`
@@ -144,7 +145,7 @@ estaban en `ListTickets`, `ListPhases` y `listTicketsByQuery`.
   El historial de un objeto se consulta con `GET /v1/audit?object_id=<id>`.
 - CLI: `agentbank <comando>`; `agentbank login`, `agentbank init`,
   `agentbank agent list|ensure|rotate|revoke|disable`.
-- MCP: `agentbank mcp`, JSON-RPC por stdio, 75 tools sin perfiles.
+- MCP: `agentbank mcp`, JSON-RPC por stdio, 76 tools sin perfiles.
 - Config: `AGENTBANK_URL`, `AGENTBANK_HUMAN_TOKEN`, `AGENTBANK_AGENT`,
   `AGENTBANK_AGENT_ROLE`, `AGENTBANK_PROJECT`, `.agentbank.json` (sin secretos).
 - `agentbank api --method … --path … --body …` es el escape hatch.

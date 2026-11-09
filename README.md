@@ -96,7 +96,7 @@ agentbank mcp
 ```
 
 - CLI completa en `docs/cli.md`.
-- MCP por stdio, 75 tools, sin perfiles, en `docs/mcp.md`.
+- MCP por stdio, 76 tools, sin perfiles, en `docs/mcp.md`.
 - Ambos consumen la misma API/OpenAPI.
 
 ## OpenAPI / Swagger
