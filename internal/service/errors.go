@@ -11,7 +11,9 @@ var (
 )
 
 // ValidationError representa un body semánticamente inválido (HTTP 422).
+// Code permite códigos específicos (por ejemplo evidencia_incompleta).
 type ValidationError struct {
+	Code    string
 	Message string
 }
 
@@ -47,6 +49,10 @@ func (e *ForbiddenError) Error() string { return e.Message }
 
 func validation(message string) error {
 	return &ValidationError{Message: message}
+}
+
+func validationCode(code, message string) error {
+	return &ValidationError{Code: code, Message: message}
 }
 
 func notFound(code, message string) error {

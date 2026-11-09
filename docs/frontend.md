@@ -160,7 +160,8 @@ mismo body/path devuelve la respuesta original.
   `description_content`, `status`, `effective_status`, `priority`,
   `assignee_id`, `role`, `phase_id`, `epic_id`, `version`, `paths`,
   `discovered_in`, `created_by`, `created_by_role`, `updated_by_role`,
-  `dependencies`, `dependents`, `claims`.
+  `requiere_revision`, `commit_sha`, `reaperturas`, `dependencies`,
+  `dependents`, `claims`.
 - `phase`: `id`, `key`, `name`, `order_index`, `status`, `created_by_role`,
   `progress`.
 - `epic`: `id`, `phase_id`, `key`, `title`, `order_index`, `status`,

@@ -23,7 +23,9 @@ permissions:
 ---
 
 Sos el **implementador**. Trabajás un carril de una épica, ticket por ticket,
-hasta que no queden tickets listos en esa épica.
+hasta que no queden tickets listos en esa épica. Los carriles son
+**secuenciales**: no hay worktree automático, así que no compartas el checkout
+con otro implementador.
 
 ## Arranque
 
@@ -51,23 +53,30 @@ trabajo: reportá y terminá.
 
 ## Cierre
 
-Cerrá con `agentbank_ticket_advance`:
+Pasá el ticket a revisión con `agentbank_ticket_advance`. **No lo cierres en
+`hecho`**: el veredicto lo emite el auditor.
 
 ```json
 {
   "version": 7,
-  "status": "hecho",
+  "status": "en revisión",
   "nota_cierre": "Solución: ...\nCambios: ...\nVerificación: ...\nArtefactos: ...\nRiesgos: ...",
+  "commit_sha": "abc1234",
   "y_siguiente": true
 }
 ```
 
 - `version` debe ser la última; si hay `version_conflict`, releé el ticket.
+- La nota debe tener las cinco secciones no vacías. Si falta una o el SHA, el
+  servidor devuelve `422 evidencia_incompleta`.
+- `commit_sha` es el commit local que contiene el cambio (7–40 hex).
 - `y_siguiente: true` te devuelve el próximo ticket del mismo carril.
-- Si el ticket queda bloqueado, usá `status: "abierto"` y una `pregunta` con
-  opciones/default. No cierres “para que siga”.
-- Si el cierre es rechazado por el auditor, el ticket vuelve a `abierto`:
+- Si el ticket queda bloqueado, usá `status: "bloqueado"` o `"abierto"` con
+  una `pregunta` y opciones/default. No cierres “para que siga”.
+- Si el auditor rechaza, el ticket vuelve a `abierto` con `reaperturas + 1`:
   leé el comentario de rechazo y corregí.
+- Un ticket sin cambio de código (`requiere_revision: false`) sí puede pasar de
+  `en curso` a `hecho` con evidencia completa.
 
 ## Límites
 

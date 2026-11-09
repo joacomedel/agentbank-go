@@ -19,6 +19,7 @@ type TicketNextInput struct {
 	Role      string
 	PhaseID   string
 	EpicID    string
+	Status    string
 	Claim     bool
 }
 
@@ -34,6 +35,11 @@ type TicketNextResult struct {
 
 // TicketNext elige el próximo ticket listo y, opcionalmente, lo reclama.
 func (s *Service) TicketNext(ctx context.Context, actor Identity, input TicketNextInput) (TicketNextResult, error) {
+	input.Status = strings.TrimSpace(input.Status)
+	if input.Status != "" && input.Status != domain.TicketOpen && input.Status != domain.TicketInReview {
+		return TicketNextResult{}, validation("status debe ser abierto o en revisión")
+	}
+	reviewQueue := input.Status == domain.TicketInReview
 	rights, err := s.loadRights(ctx, s.db, actor.Participant)
 	if err != nil {
 		return TicketNextResult{}, err
@@ -56,7 +62,7 @@ func (s *Service) TicketNext(ctx context.Context, actor Identity, input TicketNe
 	var selected ticketContext
 	var selectedPrefix string
 	claimLimit := 5
-	if input.Claim {
+	if input.Claim && !reviewQueue {
 		claimLimit = 1
 	}
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
@@ -91,6 +97,11 @@ func (s *Service) TicketNext(ctx context.Context, actor Identity, input TicketNe
 		}
 		_ = rows.Close()
 		if len(candidates) == 0 {
+			if reviewQueue {
+				result.Motive = "sin_candidatos"
+				result.MotiveCounts = map[string]int{}
+				return nil
+			}
 			result.MotiveCounts, err = s.queueMotives(ctx, tx, projectIDs, actor, rights, input)
 			if err != nil {
 				return err
@@ -110,6 +121,18 @@ func (s *Service) TicketNext(ctx context.Context, actor Identity, input TicketNe
 		}
 		selected = candidates[0]
 		selectedPrefix = prefixes[0]
+		if reviewQueue {
+			result.Candidates = make([]TicketView, 0, len(candidates))
+			for _, candidate := range candidates {
+				effective, err := s.effectiveStatus(ctx, tx, candidate.Ticket)
+				if err != nil {
+					return err
+				}
+				result.Candidates = append(result.Candidates, baseTicketView(candidate.Ticket, candidate.Project, effective))
+			}
+			result.Ticket = &result.Candidates[0]
+			return nil
+		}
 		if !input.Claim {
 			result.Candidates = make([]TicketView, 0, len(candidates))
 			for _, candidate := range candidates {
@@ -275,6 +298,37 @@ func candidateQuery(projectIDs []string, actor Identity, rights domain.Rights, i
 		placeholders[i] = "?"
 		args = append(args, id)
 	}
+	if strings.TrimSpace(input.Status) == domain.TicketInReview {
+		conditions := []string{
+			"t.project_id IN (" + strings.Join(placeholders, ",") + ")",
+			"t.status = 'en revisión'",
+			"pr.paused = 0",
+			"NOT EXISTS (SELECT 1 FROM claims c WHERE c.ticket_id = t.id AND c.released_at IS NULL)",
+		}
+		if strings.TrimSpace(input.PhaseID) != "" {
+			conditions = append(conditions, "COALESCE(e.phase_id, t.phase_id) = ?")
+			args = append(args, input.PhaseID)
+		}
+		if strings.TrimSpace(input.EpicID) != "" {
+			conditions = append(conditions, "t.epic_id = ?")
+			args = append(args, input.EpicID)
+		}
+		args = append(args, limit)
+		query := `
+		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
+		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
+		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''), t.requiere_revision, t.commit_sha, t.reaperturas,
+		       t.created_at, t.updated_at, pr.prefix
+		FROM tickets t
+		JOIN projects pr ON pr.id = t.project_id
+		LEFT JOIN epics e ON e.id = t.epic_id
+		LEFT JOIN phases ph ON ph.id = COALESCE(e.phase_id, t.phase_id)
+		WHERE ` + strings.Join(conditions, " AND ") + `
+		ORDER BY t.updated_at ASC, t.number ASC
+		LIMIT ?`
+		return query, args, nil
+	}
 	conditions := []string{
 		"t.project_id IN (" + strings.Join(placeholders, ",") + ")",
 		"t.status = 'abierto'",
@@ -314,7 +368,7 @@ func candidateQuery(projectIDs []string, actor Identity, rights domain.Rights, i
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''), t.requiere_revision, t.commit_sha, t.reaperturas,
 		       t.created_at, t.updated_at, pr.prefix
 		FROM tickets t
 		JOIN projects pr ON pr.id = t.project_id
@@ -369,15 +423,18 @@ func (s *Service) queueMotives(ctx context.Context, tx *sql.Tx, projectIDs []str
 func scanTicketWithPrefix(row interface{ Scan(...any) error }) (domain.Ticket, string, error) {
 	var ticket domain.Ticket
 	var paths, createdAt, updatedAt, prefix string
+	var requiereRevision int
 	if err := row.Scan(
 		&ticket.ID, &ticket.ProjectID, &ticket.Number, &ticket.Key, &ticket.Title,
 		&ticket.Description, &ticket.Status, &ticket.Priority, &ticket.AssigneeID,
 		&ticket.AssignedRole, &ticket.PhaseID, &ticket.EpicID, &ticket.OrderIndex,
 		&ticket.Version, &paths, &ticket.DiscoveredIn, &ticket.CreatedBy,
-		&ticket.CreatedByRole, &ticket.UpdatedByRole, &createdAt, &updatedAt, &prefix,
+		&ticket.CreatedByRole, &ticket.UpdatedByRole, &requiereRevision,
+		&ticket.CommitSHA, &ticket.Reaperturas, &createdAt, &updatedAt, &prefix,
 	); err != nil {
 		return domain.Ticket{}, "", err
 	}
+	ticket.RequiereRevision = requiereRevision != 0
 	if err := json.Unmarshal([]byte(paths), &ticket.Paths); err != nil {
 		return domain.Ticket{}, "", fmt.Errorf("paths inválidos: %w", err)
 	}

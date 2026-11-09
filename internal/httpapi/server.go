@@ -87,6 +87,7 @@ func New(database *sql.DB, logger *slog.Logger, opts Options) http.Handler {
 	mux.Handle("GET /v1/tickets/{id}", s.authenticated(s.handleGetTicket))
 	mux.Handle("PATCH /v1/tickets/{id}", s.authenticated(s.handleUpdateTicket))
 	mux.Handle("POST /v1/tickets/{id}/avanzar", s.authenticated(s.handleAdvanceTicket))
+	mux.Handle("POST /v1/tickets/{id}/revision", s.authenticated(s.handleReviewTicket))
 	mux.Handle("POST /v1/tickets/{id}/claims", s.authenticated(s.handleClaimTicket))
 	mux.Handle("POST /v1/tickets/{id}/claims/release", s.authenticated(s.handleReleaseClaim))
 	mux.Handle("POST /v1/tickets/{id}/comments", s.authenticated(s.handleAddComment))

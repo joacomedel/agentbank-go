@@ -227,7 +227,8 @@ Requiere escritura en el proyecto.
   "epic_id":"…",
   "phase_id":"…",
   "discovered_in":"API-3",
-  "depends_on":["API-1","API-2"]
+  "depends_on":["API-1","API-2"],
+  "requiere_revision":true
 }
 ```
 
@@ -236,6 +237,8 @@ Reglas:
 - Las dependencias detectan ciclos y se rechazan.
 - `priority`: `baja|media|alta|urgente`.
 - `status` inicial: `abierto` por defecto.
+- `requiere_revision` default `true`. Un ticket sin cambio de código (ADR,
+  investigación) puede crearse con `false` y cerrarse sin pasar por revisión.
 - El ticket recibe `number` y `ref = PREFIX-N`.
 
 Respuesta `201`:
@@ -247,6 +250,7 @@ Respuesta `201`:
   "status":"abierto","effective_status":"listo","priority":"alta",
   "role":"backend","phase_id":"","epic_id":"…","order_index":1,"version":1,
   "created_by":"…","created_by_role":"auditor",
+  "requiere_revision":true,"commit_sha":"","reaperturas":0,
   "paths":["src/auth"],"dependencies":[],"dependents":[],"claims":[],"comments_count":0,
   "created_at":"…","updated_at":"…"
 }
@@ -269,6 +273,29 @@ siguiente sin volver a listar todo.
 Acepta UUID, `PREFIX-N` o `key`. Devuelve dependencias, dependientes, claims
 activos y cantidad de comentarios.
 
+### Máquina de estados
+
+```text
+abierto ──claim──▶ en curso ──avanzar──▶ en revisión ──veredicto──▶ hecho
+   ▲                  │                      │
+   │                  ├──▶ abierto (pregunta/bloqueo, libera claim)
+   │                  └──▶ bloqueado
+   └──────────── rechazo (reapertura, con motivo) ◀──┘
+```
+
+- Desde `en curso` solo se puede ir a `en revisión`, `abierto` o `bloqueado`.
+  `en curso → hecho` devuelve `409 transicion_invalida` (salvo
+  `requiere_revision=false`).
+- A `hecho` solo se llega desde `en revisión` y por
+  `POST /v1/tickets/{id}/revision`. `avanzar` a `hecho` desde `en revisión`
+  también devuelve `409 transicion_invalida`.
+- `en revisión → abierto` es la reapertura y exige `comment`.
+- `cancelado` está disponible desde cualquier estado no terminal y exige
+  `comment` con el motivo.
+- Pasar a `en revisión` libera el claim y exige evidencia completa.
+- Las dependencias se liberan solo cuando el ticket está `hecho`; `en revisión`
+  sigue contando como pendiente.
+
 ### `PATCH /v1/tickets/{id}`
 
 Requiere `version`. Permite editar `title`, `description`, `status`, `priority`,
@@ -277,13 +304,16 @@ Requiere `version`. Permite editar `title`, `description`, `status`, `priority`,
 
 ### `POST /v1/tickets/{id}/avanzar`
 
-Cierra o avanza un ticket y puede dejar nota de cierre y pregunta.
+Avanza un ticket y puede dejar nota de cierre, SHA y pregunta. Para cerrar un
+ticket normal hay que pasar por `en revisión`; este endpoint no emite el
+veredicto de auditoría.
 
 ```json
 {
   "version":3,
-  "status":"hecho",
-  "nota_cierre":"Qué hice, archivos tocados, qué quedó pendiente",
+  "status":"en revisión",
+  "nota_cierre":"Solución: …\nCambios: …\nVerificación: …\nArtefactos: …\nRiesgos: …",
+  "commit_sha":"abc1234",
   "comment":"Comentario adicional",
   "pregunta":{
     "asunto":"¿Cómo seguimos?",
@@ -304,19 +334,48 @@ afectado fuera de la cola hasta que se resuelva. `divido` se comporta como
 `sigo` en esta versión (no crea ticket hijo todavía). Respuesta incluye el
 ticket, el mensaje creado y `next` si `y_siguiente=true`.
 
+Evidencia para entrar en `en revisión` (o en `hecho` con
+`requiere_revision=false`):
+
+- `nota_cierre` con las secciones `Solución:`, `Cambios:`, `Verificación:`,
+  `Artefactos:` y `Riesgos:`, cada una con contenido.
+- `commit_sha` de 7–40 hex si `requiere_revision=true`.
+- Si falta algo: `422 evidencia_incompleta` con la lista de faltantes.
+
+### `POST /v1/tickets/{id}/revision`
+
+Emite el veredicto de auditoría de un ticket `en revisión`.
+
+```json
+{"veredicto":"aprobado|rechazado","comment":"motivo y evidencia","version":7}
+```
+
+- `aprobado` → `hecho` y libera dependientes.
+- `rechazado` → `abierto` e incrementa `reaperturas`.
+- Al llegar a `AGENTBANK_MAX_REAPERTURAS` (default 2) el ticket pasa a
+  `bloqueado` y se crea una `solicitud` al rol `dueño`.
+- Agrega un comentario tipo `revisión` y eventos
+  `ticket.revision.aprobar|rechazar`.
+- Un ticket que no está `en revisión` devuelve `409 transicion_invalida`.
+
 ### `POST /v1/tickets/siguiente`
 
 ```json
-{"project_id":"…","role":"backend","phase_id":"…","epic_id":"…","claim":true}
+{"project_id":"…","role":"backend","phase_id":"…","epic_id":"…","status":"abierto|en revisión","claim":true}
 ```
 
 - Sin `project_id`, busca en todos los proyectos donde el participante es
   colaborador/admin.
-- Solo tickets `abierto`, sin claim activo, sin dependencias pendientes y sin
-  mensajes pendientes que los afecten.
+- Sin `status` (o `status=abierto`) devuelve tickets `abierto`, sin claim
+  activo, sin dependencias pendientes y sin mensajes pendientes que los
+  afecten.
+- Con `status=en revisión` devuelve la cola de auditoría: tickets en revisión,
+  ordenados por `updated_at` ascendente. Esta cola **no reclama** aunque
+  `claim=true`; el veredicto se emite con `/revision`.
 - Orden: fase → épica → ticket → prioridad → antigüedad.
 - Con `claim=false` devuelve hasta 5 candidatos.
-- Con `claim=true` toma el claim y marca el ticket `en curso`.
+- Con `claim=true` toma el claim y marca el ticket `en curso` (solo en la cola
+  normal).
 - Respuesta incluye `motivo`, `motivos`, `claims_activos` y `contexto`
   (notas de cierre de dependencias, resoluciones de mensajes y docs).
 
@@ -335,7 +394,9 @@ ticket, el mensaje creado y `next` si `y_siguiente=true`.
 
 ### Comentarios y timeline
 
-- `POST /v1/tickets/{id}/comments` con `{"body":"…","type":"comentario|nota|cierre"}`.
+- `POST /v1/tickets/{id}/comments` con
+  `{"body":"…","type":"comentario|nota|cierre|revisión"}`. El tipo `revisión`
+  lo emite el endpoint de veredicto.
 - `GET /v1/tickets/{id}/comments`.
 - `GET /v1/tickets/{id}/timeline`: comentarios + eventos de auditoría del ticket.
   Cada evento incluye `actor_role` y `session_id`, además de `action` y
@@ -616,6 +677,7 @@ Intenta entregar pendientes con backoff y dead-letter a los 10 intentos.
 | 403 | `forbidden` | Operación sobre recurso ajeno |
 | 404 | `project_not_found`, `participant_not_found`, `ticket_not_found`, `phase_not_found`, `epic_not_found`, `message_not_found`, `document_not_found`, `document_version_not_found`, `claim_not_found`, `membership_not_found`, `token_not_found`, `chain_not_found`, `webhook_not_found` | Recurso inexistente |
 | 409 | `version_conflict` | Versión desactualizada |
+| 409 | `transicion_invalida` | Cambio de estado no permitido por la máquina de estados |
 | 409 | `claim_conflict` | Ticket ya reclamado |
 | 409 | `ticket_no_listo` | Claim sobre ticket no listo |
 | 409 | `dependency_exists` | Dependencia duplicada |
@@ -624,6 +686,7 @@ Intenta entregar pendientes con backoff y dead-letter a los 10 intentos.
 | 409 | `idempotency_conflict` | Misma key, distinto request |
 | 409 | `project_slug_taken`, `project_prefix_taken`, `participant_name_taken`, `token_already_revoked`, `phase_key_taken`, `epic_key_taken`, `ticket_key_taken`, `document_route_taken` | Unicidad/estado |
 | 422 | `validation_error` | Datos inválidos |
+| 422 | `evidencia_incompleta` | Falta una sección de la nota o el `commit_sha` |
 | 429 | `rate_limited` | Rate limit |
 | 500 | `internal_error` | Error interno |
 
@@ -633,6 +696,10 @@ Intenta entregar pendientes con backoff y dead-letter a los 10 intentos.
 - SQLite en lugar de Postgres; sin `jsonb`, `text[]`, `tsvector` ni triggers.
 - Búsqueda con `LIKE`, no FTS5.
 - `divido` de `ticket_avanzar` no crea ticket hijo todavía.
+- El cierre normal exige pasar por `en revisión`; los tickets históricos en
+  `hecho` no se reescriben.
+- El `commit_sha` se valida por formato; que exista en el repo lo verifica el
+  auditor.
 - Handoff se resuelve como mensaje con texto, sin estado estructurado.
 - Telegram, CLI, MCP, UI, contratos entre proyectos, bloqueos/escalado y choque
   de áreas quedan para las etapas 7–9.

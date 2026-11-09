@@ -33,6 +33,7 @@ type AdvanceInput struct {
 	Status      *string
 	Comment     string
 	ClosingNote string
+	CommitSHA   string
 	Question    *AdvanceQuestion
 	YSiguiente  bool
 }
@@ -79,6 +80,24 @@ func (s *Service) AdvanceTicket(ctx context.Context, actor Identity, ref string,
 		if input.Version != nil && *input.Version != current.Version {
 			return conflict("version_conflict", "versión desactualizada")
 		}
+		target := current.Status
+		if input.Status != nil {
+			target = strings.TrimSpace(*input.Status)
+		}
+		if input.Question != nil && questionMode(input.Question) == "espero" && input.Status == nil {
+			target = domain.TicketOpen
+		}
+		if err := validateTransition(current.Status, target, current.RequiereRevision); err != nil {
+			return err
+		}
+		if requiresEvidence(current.Status, target, current.RequiereRevision) {
+			if err := validateClosingEvidence(input.ClosingNote, current.RequiereRevision, input.CommitSHA); err != nil {
+				return err
+			}
+		}
+		if (target == domain.TicketCancelled || (current.Status == domain.TicketInReview && target == domain.TicketOpen)) && strings.TrimSpace(input.Comment) == "" {
+			return validation("esa transición necesita un comentario con el motivo")
+		}
 		previous := ticketAuditPayload(current)
 		now := s.now().UTC()
 		commentIDs := make([]string, 0, 2)
@@ -96,11 +115,9 @@ func (s *Service) AdvanceTicket(ctx context.Context, actor Identity, ref string,
 			}
 			commentIDs = append(commentIDs, commentID)
 		}
-		if input.Status != nil {
-			current.Status = strings.TrimSpace(*input.Status)
-		}
-		if input.Question != nil && questionMode(input.Question) == "espero" && input.Status == nil {
-			current.Status = domain.TicketOpen
+		current.Status = target
+		if sha := strings.TrimSpace(input.CommitSHA); sha != "" {
+			current.CommitSHA = strings.ToLower(sha)
 		}
 		if current.Status != domain.TicketInProgress {
 			if err := releaseClaimsForTicket(ctx, tx, current.ID, now, "ticket avanzado", actor, tc.Project.ID); err != nil {
@@ -110,8 +127,8 @@ func (s *Service) AdvanceTicket(ctx context.Context, actor Identity, ref string,
 		current.Version++
 		current.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE tickets SET status = ?, version = ?, updated_by_role = ?, updated_at = ? WHERE id = ?`,
-			current.Status, current.Version, actor.Participant.AgentRole,
+			`UPDATE tickets SET status = ?, version = ?, commit_sha = ?, updated_by_role = ?, updated_at = ? WHERE id = ?`,
+			current.Status, current.Version, current.CommitSHA, actor.Participant.AgentRole,
 			timefmt.Format(now), current.ID,
 		); err != nil {
 			return fmt.Errorf("avanzar ticket: %w", err)

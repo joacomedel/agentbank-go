@@ -202,7 +202,11 @@ func (s *Server) respondError(w http.ResponseWriter, r *http.Request, identity s
 	}
 	var invalid *service.ValidationError
 	if errors.As(err, &invalid) {
-		s.writeError(w, http.StatusUnprocessableEntity, "validation_error", invalid.Message)
+		code := invalid.Code
+		if code == "" {
+			code = "validation_error"
+		}
+		s.writeError(w, http.StatusUnprocessableEntity, code, invalid.Message)
 		return
 	}
 	if errors.Is(err, service.ErrInvalidToken) || errors.Is(err, service.ErrInvalidSession) {

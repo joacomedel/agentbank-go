@@ -11,10 +11,10 @@ trabajo. La división que mejor funciona es:
 
 ```text
 Rol (subagente)        → fijo: orquestador, implementador, auditor
-Carril de ejecución    → por épica
+Carril de ejecución    → por épica, secuencial (un carril activo por repo)
 Unidad de trabajo      → por ticket
 Punto de control       → por fase
-Auditoría              → por ticket, con cierre de épica
+Auditoría              → por ticket, con veredicto estructurado
 ```
 
 En una frase: **roles fijos, carriles por épica, tickets como unidad atómica y
@@ -110,21 +110,25 @@ Los archivos están en `opencode/agents/`. El instalador los copia a
 `messages_send` y `document_create`. Los permisos de archivo del auditor no
 bloquean esas tools: solo le impiden editar código.
 
-### Carril por épica
+### Carril por épica (secuencial)
 
 ```text
 orquestador
-  ├─ implementador(epic=A)  → ticket_next(epic=A) → ... → cierre
-  ├─ implementador(epic=B)  → solo si no comparte paths con A
-  └─ auditor(epic=A)        → tickets hechos → aprobar/reabrir
+  └─ implementador(epic=A)  → ticket_next(epic=A) → en revisión
+       └─ auditor(epic=A)   → ticket_next(status=en revisión) → veredicto
 ```
 
-- Un carril por épica.
-- No paralelices tickets que comparten `paths`.
-- El carril termina cuando `ticket_next` devuelve `ticket: null` con
-  `motivo: sin_candidatos`.
-- La épica se cierra cuando no quedan tickets abiertos/en curso y el auditor
-  aprobó.
+- **Un solo carril de implementación activo por repo.** El worker actual no
+  crea worktrees: comparte checkout, índice de git y artefactos. El paralelismo
+  real llega con `worker --worktree` (Épica 5 del plan de hardening).
+- `paths` es informativo: sirve para planificar y para el aviso futuro de
+  `paths_solapados`, no para bloquear la cola.
+- El carril de implementación termina cuando `ticket_next` devuelve
+  `ticket: null` con `motivo: sin_candidatos`.
+- Después corre el carril de auditoría sobre
+  `ticket_next(status="en revisión", claim=true)`. Esa cola no reclama.
+- La épica se cierra cuando todos sus tickets están `hecho` (no alcanza con
+  `en revisión`) y el auditor emitió veredicto.
 
 ### Cómo se pasan los tickets
 
@@ -151,15 +155,22 @@ Hay tres formas, de la más simple a la más automatizada:
    El worker reclama, inyecta `AGENTBANK_TICKET`, `AGENTBANK_TICKET_ID` y
    `AGENTBANK_TOKEN`, y libera el claim si el comando falla.
 
-Para cerrar y pedir el siguiente en una sola llamada:
+Para pasar a revisión y pedir el siguiente en una sola llamada:
 
 ```json
 {
   "version": 7,
-  "status": "hecho",
+  "status": "en revisión",
   "nota_cierre": "Solución: ...\nCambios: ...\nVerificación: ...\nArtefactos: ...\nRiesgos: ...",
+  "commit_sha": "abc1234",
   "y_siguiente": true
 }
+```
+
+El cierre definitivo lo emite el auditor con `ticket_review`:
+
+```json
+{"veredicto":"aprobado","comment":"verificado contra abc1234","version":8}
 ```
 
 ## 5. Identidad: la letra chica
@@ -171,7 +182,7 @@ hagan los subagentes queda auditado como `opencode-main`.
 
 Tenés dos modos:
 
-### Modo A — una identidad por proceso (recomendado)
+### Modo A — una identidad por proceso (recomendado para carriles)
 
 - Cada rol corre en su propio proceso/worker con su propio token.
 - El MCP no fija `AGENTBANK_AGENT`; usa el `AGENTBANK_TOKEN` heredado.
@@ -218,6 +229,15 @@ orquestador es el único que escribe y los subagentes son “manos” efímeras.
 En ese caso, la trazabilidad fina queda en el timeline y en el comentario de
 cierre, no en `created_by_role`.
 
+### Recomendación híbrida
+
+- **Orquestador interactivo:** modo C, como ahora.
+- **Implementador y auditor:** modo A, como procesos `agentbank worker`
+  separados, con su propio token y una config de OpenCode sin
+  `AGENTBANK_AGENT`.
+- El orquestador lanza **workers**, no subagentes de su propio proceso, cuando
+  quiere autoría real por rol.
+
 En cualquiera de los tres modos, **todos los roles pueden crear/editar/cerrar
 tickets**: lo que cambia es a nombre de qué participante queda el snapshot del
 rol.
@@ -243,18 +263,25 @@ reescribe los snapshots viejos.
 
 ### Flujo del auditor
 
-1. Buscar cierres:
+1. Pedir la cola de revisión:
 
    ```json
-   {"project_id":"demo","status":"hecho","epic_id":"<epic>","updated_since":"2026-11-09T00:00:00Z","limit":50}
+   {"project_id":"demo","status":"en revisión","epic_id":"<epic>","claim":true}
    ```
+
+   Devuelve `candidates` ordenados por antigüedad y no crea claims.
 
 2. Por cada ticket: `ticket_get`, `ticket_timeline`, `ticket_comments`,
    `audit_list` (`object_id`), `ticket_documents`.
-3. Verificar el repo: `git show`, `git diff`, `go test`, `go vet`.
-4. Aprobar con `ticket_comment` tipo `nota` o reabrir con
-   `ticket_advance` (`status: "abierto"`) y el motivo.
+3. Verificar el repo en el `commit_sha` del ticket: `git show <sha>`,
+   `git diff`, `go test`, `go vet`.
+4. Emitir veredicto con `ticket_review`:
+   - `aprobado` → `hecho`;
+   - `rechazado` → `abierto` con motivo y contador de reaperturas.
 5. Reportar tabla de aprobados/rechazados y próximo paso.
+
+Al llegar a `AGENTBANK_MAX_REAPERTURAS` (default 2) el ticket se bloquea y se
+crea una solicitud al rol `dueño`. El ciclo de rechazos no es infinito.
 
 La skill `agentbank-audit` tiene el checklist completo.
 
@@ -366,8 +393,11 @@ Orquestador:
 
 - El MCP de AgentBank no distingue subagentes por token; la identidad es del
   proceso (ver §5).
-- No hay `worktree` automático por ticket en el worker todavía.
+- No hay `worktree` automático por épica en el worker todavía; por eso los
+  carriles son secuenciales hasta la Épica 5.
 - El auditor no tiene acceso a un “diff” guardado en AgentBank: lo lee del
-  repo. Por eso el cierre debe incluir commit/PR.
+  repo. Por eso el cierre debe incluir `commit_sha` y el artefacto.
+- El veredicto de auditoría es estructurado (`ticket_review`), pero la
+  verificación del contenido sigue siendo trabajo del auditor.
 - La compactación no reemplaza la memoria del proyecto: para eso están los
   tickets, documentos y notas de cierre.

@@ -212,4 +212,21 @@ cd /root/pipelineCompilacion
 | RSS test | ≤ 256 MB | 171 MB ✅ |
 | CPU local | ≤ 2 núcleos | 2 ✅ |
 | Temp abort | 58 °C (arranque <54 °C) | máx. 49 °C en la última corrida ✅ |
-| p95 endpoints | ≤ 50 ms | pendiente de medición formal |
+| p95 endpoints | ≤ 50 ms | 17 ms (GET ticket) / 17 ms (cola revisión) ✅ |
+
+## Hardening del flujo de agentes (2026-11-09)
+
+Medición rápida sobre `data/agentbank.db` con 25 tickets, servidor local y
+200 requests a `GET /v1/tickets/ABG-2` más 100 a
+`POST /v1/tickets/siguiente` con `status=en revisión`:
+
+| Endpoint | p50 | p95 | máx |
+|---|---:|---:|---:|
+| `GET /v1/tickets/{ref}` | 9.8 ms | 17.1 ms | 62.5 ms |
+| `POST /v1/tickets/siguiente` (revisión) | 11.1 ms | 16.9 ms | 42.3 ms |
+
+- RSS del servidor en reposo: ~12 MB.
+- Binario stripped: 12.7 MB.
+- La migración `0010` se probó sobre una copia de la base 0009: 25 tickets y 1
+  comentario preservados, `comments` reconstruida con el tipo `revisión`.
+- p95 dentro del presupuesto de 50 ms.

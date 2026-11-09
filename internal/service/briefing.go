@@ -331,7 +331,7 @@ func (s *Service) Tablero(ctx context.Context, actor Identity, projectRef string
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''), requiere_revision, commit_sha, reaperturas,
 		       created_at, updated_at
 		FROM tickets WHERE project_id = ? AND phase_id IS NULL AND epic_id IS NULL
 		ORDER BY order_index, created_at`, project.ID)

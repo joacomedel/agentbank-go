@@ -479,7 +479,7 @@ func ticketByKey(ctx context.Context, q queryer, projectID, key string) (domain.
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''), requiere_revision, commit_sha, reaperturas,
 		       created_at, updated_at
 		FROM tickets WHERE project_id = ? AND key = ?`, projectID, key))
 }

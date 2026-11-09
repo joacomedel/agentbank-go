@@ -76,14 +76,28 @@ func TestActorRoleSnapshotsAcrossEntities(t *testing.T) {
 		t.Fatalf("comentario sin author_role: %+v", comment)
 	}
 
+	if _, err := svc.ClaimTicket(context.Background(), agent, ticket.ID); err != nil {
+		t.Fatalf("ClaimTicket: %v", err)
+	}
 	advanced, err := svc.AdvanceTicket(context.Background(), agent, ticket.ID, service.AdvanceInput{
-		Status: strPtr(domain.TicketDone), ClosingNote: "Solución: probada",
+		Status:      strPtr(domain.TicketInReview),
+		ClosingNote: "Solución: probada\nCambios: ninguno\nVerificación: go test\nArtefactos: abc1234\nRiesgos: ninguno",
+		CommitSHA:   "abc1234",
 	})
 	if err != nil {
 		t.Fatalf("AdvanceTicket: %v", err)
 	}
 	if advanced.Ticket.UpdatedByRole != "auditor" {
-		t.Fatalf("ticket avanzado sin updated_by_role: %+v", advanced.Ticket)
+		t.Fatalf("ticket en revisión sin updated_by_role: %+v", advanced.Ticket)
+	}
+	reviewed, err := svc.ReviewTicket(context.Background(), agent, ticket.ID, service.ReviewInput{
+		Veredicto: "aprobado", Comment: "ok",
+	})
+	if err != nil {
+		t.Fatalf("ReviewTicket: %v", err)
+	}
+	if reviewed.Ticket.UpdatedByRole != "auditor" {
+		t.Fatalf("ticket revisado sin updated_by_role: %+v", reviewed.Ticket)
 	}
 	timeline, err := svc.Timeline(context.Background(), agent, ticket.ID, 50)
 	if err != nil {

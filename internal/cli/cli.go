@@ -88,6 +88,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return runNext(ctx, cfg, args[1:], stdout, stderr)
 	case "advance":
 		return runAdvance(ctx, cfg, args[1:], stdout, stderr)
+	case "review":
+		return runReview(ctx, cfg, args[1:], stdout, stderr)
 	case "inbox":
 		return runInbox(ctx, cfg, args[1:], stdout, stderr)
 	case "resolve":
@@ -137,6 +139,7 @@ Uso:
   agentbank novedades [flags]     long-poll
   agentbank next [flags]          siguiente ticket (claim)
   agentbank advance [flags]       avanzar/cerrar ticket
+  agentbank review [flags]        aprobar/rechazar ticket en revisión
   agentbank inbox [flags]         bandeja
   agentbank resolve [flags]       resolver mensaje
   agentbank comment [flags]       comentar ticket
@@ -451,6 +454,7 @@ func runAdvance(ctx context.Context, cfg Config, args []string, stdout, stderr i
 	status := fs.String("status", "", "nuevo estado")
 	version := fs.Int64("version", 0, "versión")
 	note := fs.String("nota-cierre", "", "nota de cierre")
+	commitSHA := fs.String("commit-sha", "", "SHA 7-40 hex del cambio")
 	comment := fs.String("comment", "", "comentario")
 	question := fs.String("pregunta", "", "JSON de pregunta")
 	next := fs.Bool("y-siguiente", false, "reclamar siguiente")
@@ -470,6 +474,9 @@ func runAdvance(ctx context.Context, cfg Config, args []string, stdout, stderr i
 	if *note != "" {
 		body["nota_cierre"] = *note
 	}
+	if *commitSHA != "" {
+		body["commit_sha"] = *commitSHA
+	}
 	if *comment != "" {
 		body["comment"] = *comment
 	}
@@ -481,6 +488,30 @@ func runAdvance(ctx context.Context, cfg Config, args []string, stdout, stderr i
 		body["pregunta"] = parsed
 	}
 	result, err := newClient(cfg).Do(ctx, "POST", "/v1/tickets/"+url.PathEscape(*id)+"/avanzar", nil, body, nil)
+	if err != nil {
+		return err
+	}
+	return writeJSON(stdout, result)
+}
+
+func runReview(ctx context.Context, cfg Config, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("review", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	id := fs.String("id", "", "ticket UUID, PREFIX-N o key")
+	verdict := fs.String("veredicto", "", "aprobado|rechazado")
+	comment := fs.String("comment", "", "motivo del veredicto")
+	version := fs.Int64("version", 0, "versión")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *id == "" {
+		return errors.New("falta --id")
+	}
+	body := map[string]any{"veredicto": *verdict, "comment": *comment}
+	if *version > 0 {
+		body["version"] = *version
+	}
+	result, err := newClient(cfg).Do(ctx, "POST", "/v1/tickets/"+url.PathEscape(*id)+"/revision", nil, body, nil)
 	if err != nil {
 		return err
 	}

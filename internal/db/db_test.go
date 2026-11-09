@@ -97,3 +97,54 @@ func TestOnlyOneActiveTokenPerParticipant(t *testing.T) {
 		t.Fatalf("insertar token después de revocar: %v", err)
 	}
 }
+
+func TestRevisionMigrationColumnsAndCommentType(t *testing.T) {
+	dir := t.TempDir()
+	handle, err := db.Open(context.Background(), filepath.Join(dir, "revision.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer handle.Close()
+	if err := db.Migrate(context.Background(), handle); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	columns := map[string]bool{}
+	rows, err := handle.Query(`PRAGMA table_info(tickets)`)
+	if err != nil {
+		t.Fatalf("table_info: %v", err)
+	}
+	for rows.Next() {
+		var cid int
+		var name, kind string
+		var notNull, pk int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &kind, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatalf("scan table_info: %v", err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("cerrar rows: %v", err)
+	}
+	for _, name := range []string{"requiere_revision", "commit_sha", "reaperturas"} {
+		if !columns[name] {
+			t.Fatalf("falta la columna %s", name)
+		}
+	}
+
+	var schema string
+	if err := handle.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'comments'`,
+	).Scan(&schema); err != nil {
+		t.Fatalf("schema comments: %v", err)
+	}
+	if !strings.Contains(schema, "revisión") {
+		t.Fatalf("comments no admite el tipo revisión: %s", schema)
+	}
+
+	// Migrar de nuevo sobre la base existente debe ser idempotente.
+	if err := db.Migrate(context.Background(), handle); err != nil {
+		t.Fatalf("Migrate segunda vez: %v", err)
+	}
+}

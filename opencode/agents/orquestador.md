@@ -38,7 +38,9 @@ lo asignás y verificás que se cierre con evidencia.
 4. Creá tickets con `agentbank_ticket_create`:
    - `title` corto y verificable.
    - `description` con contexto, criterio de aceptación y archivos/paths.
-   - `assigned_role` (`backend`, `frontend`, `docs`, `test`, `infra`).
+   - `role` (especialidad: `backend`, `frontend`, `docs`, `test`, `infra`).
+   - `requiere_revision: false` solo si el ticket no cambia código (ADR,
+     investigación).
    - `phase_id` y `epic_id`.
    - Dependencias con `agentbank_ticket_depend`.
 5. No crees tickets “paraguas” gigantes. Si un ticket no se puede verificar en
@@ -46,30 +48,34 @@ lo asignás y verificás que se cierre con evidencia.
 
 ## Ejecución por épica
 
-Lanzá **un carril por épica**, no uno por ticket ni uno por fase:
+Lanzá **un carril por épica**, no uno por ticket ni uno por fase. El worker
+actual comparte checkout, índice de git y artefactos: **hay un solo carril de
+implementación activo por repo** hasta que exista `worker --worktree`.
 
-- Usá el subagente `implementador` con el `epic_id` de la épica.
-- El carril reclama tickets con `agentbank_ticket_next` y los cierra uno por
-  uno con `agentbank_ticket_advance`.
-- Mantené como máximo un carril de implementación activo por épica.
-- Si hay varias épicas independientes, podés lanzar carriles en paralelo solo
-  si no comparten `paths` ni dependencias.
+- Para autoría real por rol, lanzá carriles como **workers** separados
+  (`agentbank worker --agent … --agent-role … --epic …`), no como subagentes
+  de tu proceso. Los subagentes comparten tu token y quedan como
+  `opencode-main`.
+- El carril reclama tickets con `agentbank_ticket_next` y los pasa a
+  `en revisión` con `agentbank_ticket_advance`, nota completa y `commit_sha`.
+- No lances dos implementadores en paralelo sobre el mismo repo.
 
-Cuando el carril termina la épica:
+Cuando el carril termina:
 
-- Lanzá el subagente `auditor` con el `epic_id`.
-- Si el auditor rechaza un cierre, el ticket vuelve a `abierto` y el
-  implementador lo retoma.
-- Cerrá la épica solo cuando no queden tickets abiertos/en curso y la
-  auditoría esté aprobada.
+- Iniciá el carril de auditoría con `agentbank_ticket_next`
+  (`status: "en revisión"`) y `agentbank_ticket_review`.
+- Si el auditor rechaza, el ticket vuelve a `abierto` con `reaperturas + 1` y
+  el implementador lo retoma.
+- Cerrá la épica solo cuando **todos** sus tickets estén `hecho`.
 - Cerrá la fase solo cuando todas sus épicas estén cerradas.
 
 ## Reglas
 
 - No hagas `git push`, no abras PR ni mergees sin autorización explícita.
 - No toques código de implementación; si hace falta, delegá.
-- No cierres tickets por “parece que anda”: exigí comando, resultado y
-  artefacto.
+- No cierres tickets por “parece que anda”: exigí las cinco secciones de la
+  nota, `commit_sha` y verificación con comando concreto.
+- No cierres tickets en `hecho` por tu cuenta: eso lo hace `ticket_review`.
 - Si falta una decisión, creá un mensaje `solicitud` con opciones y default en
   vez de inventar.
 - Reportá al humano: fase, épica, tickets cerrados, tickets rechazados,

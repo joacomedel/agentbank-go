@@ -9,45 +9,44 @@ description: Revisar tickets cerrados de AgentBank, verificar la solución y la 
 
 | Acción | MCP | CLI |
 |---|---|---|
-| Cierres recientes | `agentbank_tickets_list` | `agentbank api --method GET --path /v1/projects/<id>/tickets` |
+| Cola de revisión | `agentbank_ticket_next` (`status: "en revisión"`) | `agentbank api --method POST --path /v1/tickets/siguiente --body '{"status":"en revisión","claim":true}'` |
 | Ver ticket | `agentbank_ticket_get` | `agentbank api --method GET --path /v1/tickets/<id>` |
 | Timeline | `agentbank_ticket_timeline` | `agentbank api --method GET --path /v1/tickets/<id>/timeline` |
 | Comentarios | `agentbank_ticket_comments` | `agentbank api --method GET --path /v1/tickets/<id>/comments` |
 | Auditoría | `agentbank_audit_list` | `agentbank api --method GET --path '/v1/audit?object_id=<id>'` |
 | Documentos | `agentbank_ticket_documents` | `agentbank api --method GET --path /v1/tickets/<id>/documents` |
-| Aprobar | `agentbank_ticket_comment` | `agentbank comment --id <id> --body "..." --type nota` |
-| Reabrir | `agentbank_ticket_advance` | `agentbank advance --id <id> --status abierto --comment "..."` |
+| Aprobar/rechazar | `agentbank_ticket_review` | `agentbank review --id <id> --veredicto aprobado --comment "..."` |
 
-## 1. Descubrir cierres
+## 1. Pedir la cola de revisión
 
 ```json
 {
   "project_id": "demo",
-  "status": "hecho",
+  "status": "en revisión",
   "epic_id": "<epic>",
-  "updated_since": "2026-11-08T00:00:00Z",
-  "limit": 50
+  "claim": true
 }
 ```
 
 - Si auditás una épica, filtrá por `epic_id`.
 - Si auditás una fase, filtrá por `phase_id`.
-- Si auditás el día, usá `updated_since` con la última marca.
-- Guardá la marca de tiempo para la próxima auditoría.
+- La cola viene ordenada por antigüedad y **no crea claims**.
+- Si `candidates` está vacío, no hay revisiones pendientes.
 
 ## 2. Recolectar evidencia
 
 Por cada ticket:
 
 1. `agentbank_ticket_get` → `status`, `version`, `created_by`,
-   `created_by_role`, `assigned_role`, `paths`, `epic_id`.
+   `created_by_role`, `role`, `paths`, `epic_id`, `commit_sha`, `reaperturas`.
 2. `agentbank_ticket_timeline` → comentarios y eventos. Buscá el evento
    `ticket.avanzar` y el comentario `cierre`.
 3. `agentbank_ticket_comments` → tipo `cierre` (nota de cierre).
 4. `agentbank_audit_list` con `object_id` → eventos, `actor_role`,
    `session_id`, `hash` y cadena.
 5. `agentbank_ticket_documents` → documentos adjuntos.
-6. En el repo: `git log --oneline`, `git show <commit>`, `git diff`.
+6. En el repo: `git show <commit_sha>`, `git diff`, `go test`, `go vet`. Si el
+   SHA no existe, rechazá.
 
 ## 3. Checklist
 
@@ -61,41 +60,40 @@ Por cada ticket:
 - [ ] No quedaron dependencias abiertas.
 - [ ] El `actor_role` del cierre coincide con el rol asignado o está
       justificado.
-- [ ] El commit/PR existe y coincide con el diff.
+- [ ] El `commit_sha` existe y coincide con el diff del ticket.
 - [ ] El ticket no se cerró solo con un comentario sin cambio verificable.
 
 ## 4. Veredicto
 
 ### Aprobado
 
-```text
-Auditoría: aprobado
-- Solución: ...
-- Verificación: ...
-- Evidencia: ...
-- Observaciones: ...
+```json
+{
+  "id": "DEMO-12",
+  "veredicto": "aprobado",
+  "comment": "verificado contra abc1234: ...",
+  "version": 8
+}
 ```
 
-Usá `agentbank_ticket_comment` con `type: "nota"`. No cambies el estado.
+`agentbank_ticket_review` mueve el ticket a `hecho` y deja comentario tipo
+`revisión` + evento de auditoría.
 
 ### Rechazado
 
-```text
-Auditoría: rechazado
-- Falta: ...
-- Esperado: ...
-- Evidencia: ...
-```
-
-Reabrí con `agentbank_ticket_advance`:
-
 ```json
 {
-  "version": 8,
-  "status": "abierto",
-  "comment": "Auditoría: rechazado\n- Falta: ...\n- Esperado: ...\n- Evidencia: ..."
+  "id": "DEMO-12",
+  "veredicto": "rechazado",
+  "comment": "falta test de regresión para el caso borde",
+  "version": 8
 }
 ```
+
+El ticket vuelve a `abierto` e incrementa `reaperturas`. Al llegar a
+`AGENTBANK_MAX_REAPERTURAS` se bloquea y se crea una solicitud al rol `dueño`.
+No reabras con `ticket_advance`: la reapertura de auditoría usa
+`ticket_review`.
 
 Si el problema es otro alcance, creá un ticket de seguimiento con
 `agentbank_ticket_create` y `discovered_in` apuntando al original.
@@ -116,7 +114,6 @@ Al final: cuántos aprobados, cuántos rechazados, y el próximo paso.
 - No edites código de implementación.
 - Sí podés escribir tickets con MCP: comentar, editar, reabrir, crear
   seguimiento y cerrar con evidencia.
-- Preferí aprobar con comentario; cerrar es una acción válida si el flujo lo
-  pide.
+- El cierre a `hecho` se hace con `ticket_review`, no con un comentario suelto.
 - No confíes en la nota: verificá el repo.
 - Si auditás tu propio trabajo, dejalo asentado.

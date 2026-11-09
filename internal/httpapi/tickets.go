@@ -8,19 +8,20 @@ import (
 
 func (s *Server) handleCreateTicket(w http.ResponseWriter, r *http.Request, identity service.Identity) {
 	var body struct {
-		Title        string   `json:"title"`
-		Description  string   `json:"description"`
-		Status       string   `json:"status"`
-		Priority     string   `json:"priority"`
-		AssigneeID   string   `json:"assignee_id"`
-		Role         string   `json:"role"`
-		PhaseID      string   `json:"phase_id"`
-		EpicID       string   `json:"epic_id"`
-		OrderIndex   int64    `json:"order_index"`
-		Paths        []string `json:"paths"`
-		DiscoveredIn string   `json:"discovered_in"`
-		Key          string   `json:"key"`
-		DependsOn    []string `json:"depends_on"`
+		Title            string   `json:"title"`
+		Description      string   `json:"description"`
+		Status           string   `json:"status"`
+		Priority         string   `json:"priority"`
+		AssigneeID       string   `json:"assignee_id"`
+		Role             string   `json:"role"`
+		PhaseID          string   `json:"phase_id"`
+		EpicID           string   `json:"epic_id"`
+		OrderIndex       int64    `json:"order_index"`
+		Paths            []string `json:"paths"`
+		DiscoveredIn     string   `json:"discovered_in"`
+		Key              string   `json:"key"`
+		DependsOn        []string `json:"depends_on"`
+		RequiereRevision *bool    `json:"requiere_revision"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		s.writeError(w, http.StatusBadRequest, "invalid_json", "body JSON inválido: "+err.Error())
@@ -31,7 +32,7 @@ func (s *Server) handleCreateTicket(w http.ResponseWriter, r *http.Request, iden
 		Priority: body.Priority, AssigneeID: body.AssigneeID, AssignedRole: body.Role,
 		PhaseID: body.PhaseID, EpicID: body.EpicID, OrderIndex: body.OrderIndex,
 		Paths: body.Paths, DiscoveredIn: body.DiscoveredIn, Key: body.Key,
-		DependsOn: body.DependsOn,
+		DependsOn: body.DependsOn, RequiereRevision: body.RequiereRevision,
 	})
 	if err != nil {
 		s.respondError(w, r, identity, err)
@@ -107,6 +108,7 @@ func (s *Server) handleAdvanceTicket(w http.ResponseWriter, r *http.Request, ide
 		Status      *string `json:"status"`
 		Comment     string  `json:"comment"`
 		ClosingNote string  `json:"nota_cierre"`
+		CommitSHA   string  `json:"commit_sha"`
 		YSiguiente  bool    `json:"y_siguiente"`
 		Question    *struct {
 			Subject                  string   `json:"asunto"`
@@ -126,7 +128,8 @@ func (s *Server) handleAdvanceTicket(w http.ResponseWriter, r *http.Request, ide
 	}
 	input := service.AdvanceInput{
 		Version: body.Version, Status: body.Status, Comment: body.Comment,
-		ClosingNote: body.ClosingNote, YSiguiente: body.YSiguiente,
+		ClosingNote: body.ClosingNote, CommitSHA: body.CommitSHA,
+		YSiguiente: body.YSiguiente,
 	}
 	if body.Question != nil {
 		input.Question = &service.AdvanceQuestion{
@@ -138,6 +141,26 @@ func (s *Server) handleAdvanceTicket(w http.ResponseWriter, r *http.Request, ide
 		}
 	}
 	result, err := s.svc.AdvanceTicket(r.Context(), identity, r.PathValue("id"), input)
+	if err != nil {
+		s.respondError(w, r, identity, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleReviewTicket(w http.ResponseWriter, r *http.Request, identity service.Identity) {
+	var body struct {
+		Veredicto string `json:"veredicto"`
+		Comment   string `json:"comment"`
+		Version   *int64 `json:"version"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid_json", "body JSON inválido: "+err.Error())
+		return
+	}
+	result, err := s.svc.ReviewTicket(r.Context(), identity, r.PathValue("id"), service.ReviewInput{
+		Veredicto: body.Veredicto, Comment: body.Comment, Version: body.Version,
+	})
 	if err != nil {
 		s.respondError(w, r, identity, err)
 		return
@@ -238,6 +261,7 @@ func (s *Server) handleTicketNext(w http.ResponseWriter, r *http.Request, identi
 		Role      string `json:"role"`
 		PhaseID   string `json:"phase_id"`
 		EpicID    string `json:"epic_id"`
+		Status    string `json:"status"`
 		Claim     *bool  `json:"claim"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
@@ -250,7 +274,7 @@ func (s *Server) handleTicketNext(w http.ResponseWriter, r *http.Request, identi
 	}
 	result, err := s.svc.TicketNext(r.Context(), identity, service.TicketNextInput{
 		ProjectID: body.ProjectID, Role: body.Role, PhaseID: body.PhaseID,
-		EpicID: body.EpicID, Claim: claim,
+		EpicID: body.EpicID, Status: body.Status, Claim: claim,
 	})
 	if err != nil {
 		s.respondError(w, r, identity, err)

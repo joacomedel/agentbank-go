@@ -18,7 +18,8 @@ Si el MCP no está disponible, usá la CLI `agentbank`.
 | Próximo ticket | `agentbank_ticket_next` | `agentbank next --epic <id>` |
 | Ver ticket | `agentbank_ticket_get` | `agentbank api --method GET --path /v1/tickets/<id>` |
 | Comentar | `agentbank_ticket_comment` | `agentbank comment --id <id> --body "..." --type nota` |
-| Cerrar/avanzar | `agentbank_ticket_advance` | `agentbank advance --id <id> --status hecho --nota-cierre "..."` |
+| Pasar a revisión | `agentbank_ticket_advance` | `agentbank advance --id <id> --status "en revisión" --nota-cierre "..." --commit-sha <sha>` |
+| Veredicto | `agentbank_ticket_review` | `agentbank review --id <id> --veredicto aprobado --comment "..."` |
 | Timeline | `agentbank_ticket_timeline` | `agentbank api --method GET --path /v1/tickets/<id>/timeline` |
 
 ## 1. Reclamar
@@ -56,13 +57,16 @@ tiene.
   - Otros: el comando que declare el repo.
 - No commitees tokens, `.env`, bases ni artefactos.
 
-## 4. Cerrar con evidencia
+## 4. Pasar a revisión con evidencia
+
+No cierres en `hecho`: el veredicto lo emite el auditor.
 
 ```json
 {
   "version": 7,
-  "status": "hecho",
+  "status": "en revisión",
   "nota_cierre": "Solución: ...\nCambios: ...\nVerificación: ...\nArtefactos: ...\nRiesgos: ...",
+  "commit_sha": "abc1234",
   "y_siguiente": true
 }
 ```
@@ -80,11 +84,16 @@ Riesgos: pendientes, deuda o “ninguno”.
 Reglas:
 
 - `version` tiene que ser la última. Si hay `version_conflict`, releé.
+- Las cinco secciones son obligatorias y no vacías; si falta una, el servidor
+  devuelve `422 evidencia_incompleta`.
+- `commit_sha` de 7–40 hex es obligatorio si `requiere_revision=true`.
 - `y_siguiente: true` devuelve el próximo ticket del mismo carril.
 - Si no pudiste terminar, no cierres: `status: "abierto"` + `comment` con el
   bloqueo, o una `pregunta` con opciones/default.
-- Si el auditor rechaza, el ticket vuelve a `abierto`: leé el comentario y
-  corregí.
+- Si el auditor rechaza, el ticket vuelve a `abierto` con `reaperturas + 1`:
+  leé el comentario y corregí.
+- Un ticket marcado `requiere_revision: false` puede cerrarse en `hecho` con
+  evidencia completa.
 
 ## 5. Terminar el carril
 

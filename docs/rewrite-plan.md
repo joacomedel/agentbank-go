@@ -44,6 +44,8 @@ documentada.
 
 - `tickets`, `ticket_edges`, `claims`, `comments`.
 - Estados y transiciones; `listo` derivado; ciclos rechazados.
+- Desde el hardening, el cierre normal pasa por `en revisión` y veredicto
+  estructurado (`POST /v1/tickets/{id}/revision`).
 - Claim con lease y heartbeat; `POST /v1/tickets/siguiente` con
   `BEGIN IMMEDIATE` y orden fase→épica→ticket→prioridad→antigüedad.
 - `GET /v1/tickets/{id}`, `GET .../timeline`, comentarios, `ticket_avanzar`.
@@ -95,7 +97,7 @@ documentada.
 
 - Telegram, contratos entre proyectos, bloqueos/escalado y choque de áreas.
 
-### Fase 7 — Moto
+### Fase 10 — Moto
 
 - systemd con `MemoryMax=128M`, `Nice=10`, bind a `127.0.0.1`/ZeroTier.
 - Backup SQLite, rotación de logs, healthcheck.
@@ -108,7 +110,7 @@ documentada.
 | Salud | `GET /healthz`, `GET /v1/meta` |
 | Identidad | `GET /v1/me`, `GET/POST /v1/projects`, `GET/POST /v1/participants`, `POST /v1/participants/{id}/tokens`, `POST /v1/tokens/{id}/revoke` |
 | Membresías | `GET/PUT/DELETE /v1/projects/{id}/members` |
-| Tickets | `GET/POST /v1/projects/{id}/tickets`, `GET/PATCH /v1/tickets/{id}`, `POST /v1/tickets/siguiente`, `POST /v1/tickets/{id}/claims`, `POST /v1/tickets/{id}/claims/release`, `POST/GET /v1/tickets/{id}/comments`, `GET /v1/tickets/{id}/timeline` |
+| Tickets | `GET/POST /v1/projects/{id}/tickets`, `GET/PATCH /v1/tickets/{id}`, `POST /v1/tickets/siguiente`, `POST /v1/tickets/{id}/avanzar`, `POST /v1/tickets/{id}/revision`, `POST /v1/tickets/{id}/claims`, `POST /v1/tickets/{id}/claims/release`, `POST/GET /v1/tickets/{id}/comments`, `GET /v1/tickets/{id}/timeline` |
 | Dependencias | `POST/DELETE /v1/tickets/{id}/dependencies` |
 | Fases/épicas | `GET/POST /v1/projects/{id}/phases`, `PATCH /v1/phases/{id}`, `GET/POST /v1/projects/{id}/epics`, `PATCH /v1/epics/{id}` |
 | Mensajes | `POST /v1/messages`, `GET /v1/me/bandeja`, `GET /v1/messages/{id}`, `POST /v1/messages/{id}/resolver` |
@@ -116,8 +118,8 @@ documentada.
 | Auditoría | `GET /v1/audit`, `GET /v1/audit/chains`, `GET /v1/audit/verify` |
 
 Los nombres y campos buscan parecerse a la API vieja; las diferencias se
-documentan en `docs/api.md`. Las etapas 1–6 ya están implementadas; CLI, MCP,
-UI y Telegram quedan en las etapas 7–9.
+documentan en `docs/api.md`. Las etapas 1–7 están implementadas (incluido CLI y
+MCP); la UI se construye fuera de este repo y Telegram queda para la etapa 9.
 
 ## Presupuesto
 

@@ -9,7 +9,7 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 - Backend Go + SQLite, sin UI de producto.
 - Etapas **0–7 implementadas**: identidad/auditoría, tickets/cola, fases/épicas,
   mensajes, documentos, operación/hardening, CLI/MCP/worker básico.
-- **57 tests** verdes.
+- **64 tests** verdes.
 - `main` incluye OpenAPI/Swagger, feed incremental `/v1/changes`, CLI y MCP de
   75 tools sin perfiles, tokens por agente, `agent_role`, snapshots de rol en
   cada creación y subagentes de OpenCode (orquestador/implementador/auditor).
@@ -17,8 +17,17 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
   con el binario anterior (0008): agrega columnas y rellena `created_by_role`
   de tickets, comentarios, fases y documentos desde `participants.agent_role`.
   Las filas sin rol reconstruible quedan con `''`.
-- Pendiente: ejecutor `opencode-server`/worktrees del worker, Telegram,
-  contratos entre proyectos, bloqueos/escalado y choque de áreas.
+- **Hardening (ADR 0007, Épica 1 implementada):** `0010_revision_estados.sql`
+  agrega `requiere_revision`, `commit_sha` y `reaperturas`; el cierre normal
+  pasa por `en revisión`; `POST /v1/tickets/{id}/revision` emite el veredicto;
+  la evidencia exige las cinco secciones y SHA; la cola del auditor es
+  `ticket_next(status="en revisión")`.
+- La fase `hardening-flujo` quedó cargada con 7 épicas y 24 tickets. E1 está
+  implementada; E2–E7 quedan planificadas.
+- Pendiente: Épicas 2–7 del hardening (claims robustos, idempotencia,
+  identidad/roles, worktrees, contexto/permisos, docs), ejecutor
+  `opencode-server`, Telegram, contratos entre proyectos, bloqueos/escalado y
+  choque de áreas.
 - La UI se construye **fuera de este repo** contra OpenAPI.
 
 ## 2. Orden de lectura para un agente nuevo

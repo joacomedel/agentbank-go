@@ -80,8 +80,9 @@ Hay **75 tools**, sin filtro por perfil. Categorías:
 - Fases y épicas: `phases_list`, `phase_create`, `phase_get`, `phase_edit`,
   `epics_list`, `epic_create`, `epic_get`, `epic_edit`.
 - Tickets: `tickets_list`, `ticket_create`, `ticket_get`, `ticket_edit`,
-  `ticket_advance`, `ticket_next`, `ticket_claim`, `ticket_release`,
-  `ticket_comment`, `ticket_comments`, `ticket_timeline`, `ticket_depend`,
+  `ticket_advance`, `ticket_review`, `ticket_next`, `ticket_claim`,
+  `ticket_release`, `ticket_comment`, `ticket_comments`, `ticket_timeline`,
+  `ticket_depend`,
   `ticket_undepend`, `ticket_documents`, `ticket_attach_document`.
 - Mensajes: `messages_send`, `messages_list`, `message_get`, `inbox`,
   `message_state`, `message_take`, `message_resolve`, `message_discard`,
@@ -109,6 +110,7 @@ y hay `AGENTBANK_PROJECT`, se usa como fallback. `participant_create` acepta
 |---|---|---:|
 | Arranque | `me` + `ticket_next` | 2 |
 | Loop por ticket | `ticket_next` + `ticket_advance` | 2 |
+| Auditar | `ticket_next(status=en revisión)` + `ticket_review` | 2 |
 | Ver novedades | `changes` o `tickets_list(updated_since)` | 1 |
 | Esperar trabajo | `novedades` con `wait` | 1 |
 | Bandeja | `inbox` + `message_resolve` por N | 1 + N |
@@ -130,11 +132,19 @@ Detalle en `docs/mcp-flows.md`.
 ```
 
 ```json
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ticket_advance","arguments":{"id":"API-42","version":3,"status":"hecho","nota_cierre":"Listo","y_siguiente":true}}}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ticket_advance","arguments":{"id":"API-42","version":3,"status":"en revisión","nota_cierre":"Solución: …\nCambios: …\nVerificación: …\nArtefactos: …\nRiesgos: …","commit_sha":"abc1234","y_siguiente":true}}}
 ```
 
 ```json
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"changes","arguments":{"project_id":"API","since":"<cursor>"}}}
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"ticket_review","arguments":{"id":"API-42","veredicto":"aprobado","comment":"verificado contra abc1234","version":4}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"ticket_next","arguments":{"project_id":"API","status":"en revisión","claim":true}}}
+```
+
+```json
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"changes","arguments":{"project_id":"API","since":"<cursor>"}}}
 ```
 
 ## Idempotencia

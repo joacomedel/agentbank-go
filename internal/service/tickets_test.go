@@ -337,21 +337,32 @@ func TestAdvanceTicketWithClosingNoteAndQuestion(t *testing.T) {
 		t.Fatalf("ClaimTicket: %v", err)
 	}
 	version := claimed.Ticket.Version
+	note := "Solución: terminado\nCambios: tickets.go\nVerificación: go test ./...\nArtefactos: abc1234\nRiesgos: ninguno"
 	result, err := svc.AdvanceTicket(context.Background(), agent, ticket.ID, service.AdvanceInput{
-		Version: &version, Status: strPtr(domain.TicketDone), ClosingNote: "Terminado",
+		Version: &version, Status: strPtr(domain.TicketInReview),
+		ClosingNote: note, CommitSHA: "abc1234",
 		Question: &service.AdvanceQuestion{
 			Subject: "¿Revisar?", Body: "Quedó listo", Options: []string{"sí", "no"},
-			DefaultOption: intPtr(0), Mode: "espero", Motivo: "consultar_siempre",
+			DefaultOption: intPtr(0), Mode: "sigo",
 		},
 	})
 	if err != nil {
 		t.Fatalf("AdvanceTicket: %v", err)
 	}
-	if result.Ticket.Status != domain.TicketDone {
+	if result.Ticket.Status != domain.TicketInReview {
 		t.Fatalf("status=%q", result.Ticket.Status)
 	}
 	if result.Message == nil {
 		t.Fatal("no se creó la pregunta")
+	}
+	review, err := svc.ReviewTicket(context.Background(), human, ticket.ID, service.ReviewInput{
+		Veredicto: "aprobado", Comment: "evidencia correcta",
+	})
+	if err != nil {
+		t.Fatalf("ReviewTicket: %v", err)
+	}
+	if review.Ticket.Status != domain.TicketDone {
+		t.Fatalf("status tras revisión=%q", review.Ticket.Status)
 	}
 	comments, _, err := svc.ListComments(context.Background(), human, ticket.ID, 50, "")
 	if err != nil {

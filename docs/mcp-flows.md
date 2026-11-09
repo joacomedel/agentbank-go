@@ -9,7 +9,8 @@ tienen lógica de negocio propia.
 1. **Incremental antes que listado completo.** Usar `updated_since`, cursores y
    `/v1/changes`; nunca listar todos los tickets para detectar uno nuevo.
 2. **Endpoints compuestos.** `ticket_siguiente` trae ticket + contexto + claim;
-   `ticket_avanzar` combina estado + nota + pregunta + siguiente.
+   `ticket_avanzar` combina estado + nota + SHA + pregunta + siguiente;
+   `ticket_review` emite el veredicto de auditoría.
 3. **Long-poll antes que polling.** `/v1/novedades?wait=20` espera cambios en
    vez de repetir requests.
 4. **Metadatos antes que contenido.** Los listados de docs devuelven
@@ -25,7 +26,8 @@ tienen lógica de negocio propia.
 |---|---|---:|
 | Arranque de agente | `GET /v1/me?proyecto=…` → briefing | 1 |
 | Próximo ticket + contexto + claim | `POST /v1/tickets/siguiente` | 1 |
-| Cerrar/avanzar/preguntar/siguiente | `POST /v1/tickets/{id}/avanzar` | 1 |
+| Avanzar/preguntar/siguiente | `POST /v1/tickets/{id}/avanzar` | 1 |
+| Aprobar/rechazar | `POST /v1/tickets/{id}/revision` | 1 |
 | Ver un ticket completo | `GET /v1/tickets/{ref}` | 1 |
 | Tickets nuevos/cambiados | `GET /v1/projects/{id}/tickets?updated_since=…` | 1 |
 | Cambios de cualquier objeto | `GET /v1/changes?since=…` | 1 |
@@ -52,7 +54,8 @@ tienen lógica de negocio propia.
 
 1. `POST /v1/tickets/siguiente` → ticket + contexto.
 2. Trabajar.
-3. `POST /v1/tickets/{id}/avanzar` → estado, nota, pregunta y siguiente ticket.
+3. `POST /v1/tickets/{id}/avanzar` → `en revisión`, nota, SHA, pregunta y
+   siguiente ticket.
 
 **2 llamadas por ticket.** Si necesita comentar adjuntos o docs, suma 1–2.
 Antes del rediseño eran 5–7 llamadas (listar, obtener, reclamar, comentar,
@@ -62,24 +65,26 @@ cerrar, buscar siguiente).
 
 1. `POST /v1/tickets/siguiente` con `claim=true`, `epic_id=<épica>` y
    `role=<rol>` → solo tickets de esa épica.
-2. Cerrar con `POST /v1/tickets/{id}/avanzar` y `y_siguiente=true` → próximo
-   ticket del mismo carril.
+2. Pasar a revisión con `POST /v1/tickets/{id}/avanzar`,
+   `status=en revisión`, `nota_cierre` completa, `commit_sha` y
+   `y_siguiente=true` → próximo ticket del mismo carril.
 3. Cuando devuelve `ticket: null`, el carril terminó (`motivo` explica por qué).
 
 El worker de la CLI ya soporta `--epic` y `--phase`; el `--cmd` puede lanzar
 `opencode run --agent implementador`.
 
-### 2c. Auditor: cierres de una épica
+### 2c. Auditor: cola de revisión de una épica
 
-1. `GET /v1/projects/{id}/tickets?status=hecho&epic_id=<épica>&updated_since=…`
-   → cierres nuevos.
-2. `GET /v1/tickets/{id}/timeline` → nota de cierre, eventos, `actor_role` y
-   `session_id`.
+1. `POST /v1/tickets/siguiente` con `status=en revisión`, `epic_id=<épica>` y
+   `claim=true` → tickets esperando veredicto, ordenados por antigüedad. La
+   cola no crea claims.
+2. `GET /v1/tickets/{id}/timeline` → nota de cierre, `commit_sha`, eventos,
+   `actor_role` y `session_id`.
 3. `GET /v1/audit?object_id=<id>` → cadena y payload del cierre.
-4. `POST /v1/tickets/{id}/comments` (`type=nota`) para aprobar o
-   `POST /v1/tickets/{id}/avanzar` (`status=abierto`) para reabrir.
+4. `POST /v1/tickets/{id}/revision` con `aprobado` o `rechazado` y el motivo.
 
-**3–4 llamadas por ticket auditado**, más las de verificación en el repo.
+**3–4 llamadas por ticket auditado**, más la verificación del `commit_sha` en
+el repo.
 
 ### 3. Worker: detectar trabajo nuevo sin listar todo
 

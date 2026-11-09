@@ -21,35 +21,39 @@ const (
 	PhaseOpen   = "abierta"
 	PhaseClosed = "cerrada"
 
-	CommentNote  = "comentario"
-	CommentNota  = "nota"
-	CommentClose = "cierre"
+	CommentNote   = "comentario"
+	CommentNota   = "nota"
+	CommentClose  = "cierre"
+	CommentReview = "revisión"
 )
 
 // Ticket es la unidad de trabajo. Number es correlativo por proyecto y Ref se
 // compone con el prefijo del proyecto.
 type Ticket struct {
-	ID            string
-	ProjectID     string
-	Number        int64
-	Key           string
-	Title         string
-	Description   string
-	Status        string
-	Priority      string
-	AssigneeID    string
-	AssignedRole  string
-	PhaseID       string
-	EpicID        string
-	OrderIndex    int64
-	Version       int64
-	Paths         []string
-	DiscoveredIn  string
-	CreatedBy     string
-	CreatedByRole string
-	UpdatedByRole string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID               string
+	ProjectID        string
+	Number           int64
+	Key              string
+	Title            string
+	Description      string
+	Status           string
+	Priority         string
+	AssigneeID       string
+	AssignedRole     string
+	PhaseID          string
+	EpicID           string
+	OrderIndex       int64
+	Version          int64
+	Paths            []string
+	DiscoveredIn     string
+	CreatedBy        string
+	CreatedByRole    string
+	UpdatedByRole    string
+	RequiereRevision bool
+	CommitSHA        string
+	Reaperturas      int64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // Ref devuelve PREFIX-N.
