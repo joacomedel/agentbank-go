@@ -162,13 +162,13 @@ func (s *Service) publishArtifactTx(ctx context.Context, tx *sql.Tx, actor Ident
 	size := int64(len(content))
 	var artifactID string
 	var currentVersion int64
-	var currentHash string
+	var currentHash, currentSourceCommit string
 	err := tx.QueryRowContext(ctx, `
-		SELECT a.id, a.current_version, v.hash
+		SELECT a.id, a.current_version, v.hash, a.source_commit
 		FROM artifacts a
 		JOIN artifact_versions v ON v.artifact_id = a.id AND v.version = a.current_version
 		WHERE a.project_id = ? AND a.path = ?`, projectID, artifactPath,
-	).Scan(&artifactID, &currentVersion, &currentHash)
+	).Scan(&artifactID, &currentVersion, &currentHash, &currentSourceCommit)
 	if errors.Is(err, sql.ErrNoRows) {
 		artifactID = id.New()
 		if _, err := tx.ExecContext(ctx, `
@@ -209,6 +209,34 @@ func (s *Service) publishArtifactTx(ctx context.Context, tx *sql.Tx, actor Ident
 		return ArtifactView{}, fmt.Errorf("buscar artefacto: %w", err)
 	}
 	if hash == currentHash {
+		if sourceCommit != "" && sourceCommit != currentSourceCommit {
+			// Mismo contenido desde otro commit: no se crea versión, pero se
+			// actualiza el origen verificado y se audita.
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE artifacts SET source_commit = ?, updated_at = ? WHERE id = ?`,
+				sourceCommit, timefmt.Format(now), artifactID,
+			); err != nil {
+				return ArtifactView{}, fmt.Errorf("actualizar origen de artefacto: %w", err)
+			}
+			if _, err := audit.Append(ctx, tx, audit.Input{
+				ChainID: chainForProject(projectID), Actor: auditActor(actor),
+				Action: "artefacto.publicar", ObjectType: "artefacto", ObjectID: artifactID, ProjectID: projectID,
+				Payload: map[string]any{
+					"artifact_id": artifactID, "path": artifactPath, "version": currentVersion,
+					"hash": hash, "content_type": contentType, "source_commit": sourceCommit,
+					"metadata_only": true,
+				},
+				CreatedAt: now,
+			}); err != nil {
+				return ArtifactView{}, err
+			}
+			view, err := s.artifactView(ctx, tx, artifactID, 0)
+			if err != nil {
+				return ArtifactView{}, err
+			}
+			view.Action = "sin_cambios"
+			return view, nil
+		}
 		view, err := s.artifactView(ctx, tx, artifactID, 0)
 		if err != nil {
 			return ArtifactView{}, err

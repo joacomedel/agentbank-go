@@ -106,7 +106,8 @@ curl -sS -X POST "$AGENTBANK_URL/v1/projects/$PROJECT/artifacts" \
 
 Respuesta: el artefacto con `version`, `hash`, `size_bytes`, `action`
 (`creado`, `actualizado` o `sin_cambios`). Si el hash no cambia, **no se crea
-versión nueva**.
+versión nueva**; si mandás otro `source_commit`, se actualiza el origen
+verificado y queda auditado (`metadata_only`).
 
 ### Publicar un lote (CI)
 

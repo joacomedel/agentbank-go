@@ -63,6 +63,14 @@ func TestArtifactsPublishReadSyncAndETag(t *testing.T) {
 		t.Fatalf("mismo contenido: status=%d body=%v", status, same)
 	}
 
+	status, sameNewCommit, _ := env.do(t, http.MethodPost, "/v1/projects/"+projectID+"/artifacts", env.humanToken, map[string]any{
+		"path": "openapi.json", "content": content, "source_commit": "fed4321",
+	})
+	if status != http.StatusOK || sameNewCommit["action"] != "sin_cambios" ||
+		sameNewCommit["version"].(float64) != 1 || sameNewCommit["source_commit"] != "fed4321" {
+		t.Fatalf("mismo contenido desde otro commit: status=%d body=%v", status, sameNewCommit)
+	}
+
 	status, raw, headers := env.rawRequest(t, http.MethodGet, "/v1/projects/"+projectID+"/artifacts/raw/openapi.json", env.humanToken, nil)
 	if status != http.StatusOK {
 		t.Fatalf("raw: status=%d body=%s", status, raw)
