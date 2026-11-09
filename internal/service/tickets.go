@@ -551,7 +551,9 @@ func (s *Service) UpdateTicket(ctx context.Context, actor Identity, ref string, 
 			if err := validateTicketStatus(status); err != nil {
 				return err
 			}
-			current.Status = status
+			if status != current.Status {
+				return conflict("transicion_invalida", "usá /avanzar o /revision para cambiar de estado")
+			}
 		}
 		if update.Priority != nil {
 			priority := strings.TrimSpace(*update.Priority)

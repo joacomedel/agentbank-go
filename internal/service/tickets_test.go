@@ -71,11 +71,22 @@ func TestTicketCRUDDependenciesAndTimeline(t *testing.T) {
 	var forbidden *service.ForbiddenError
 	_ = forbidden
 
-	version := first.Version
-	if _, err := svc.UpdateTicket(context.Background(), human, first.Ref, service.TicketUpdate{
-		Status: strPtr(domain.TicketDone), Version: &version,
+	claimed, err := svc.ClaimTicket(context.Background(), human, first.Ref)
+	if err != nil {
+		t.Fatalf("ClaimTicket: %v", err)
+	}
+	version := claimed.Ticket.Version
+	if _, err := svc.AdvanceTicket(context.Background(), human, first.Ref, service.AdvanceInput{
+		Version: &version, Status: strPtr(domain.TicketInReview),
+		ClosingNote: "Solución: ok\nCambios: ninguno\nVerificación: test\nArtefactos: abc1234\nRiesgos: ninguno",
+		CommitSHA:   "abc1234",
 	}); err != nil {
-		t.Fatalf("UpdateTicket: %v", err)
+		t.Fatalf("AdvanceTicket: %v", err)
+	}
+	if _, err := svc.ReviewTicket(context.Background(), human, first.Ref, service.ReviewInput{
+		Veredicto: "aprobado", Comment: "ok",
+	}); err != nil {
+		t.Fatalf("ReviewTicket: %v", err)
 	}
 	got, err := svc.GetTicket(context.Background(), human, second.Ref)
 	if err != nil {

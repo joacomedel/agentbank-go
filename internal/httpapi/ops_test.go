@@ -70,12 +70,16 @@ func TestTicketHTTPFlow(t *testing.T) {
 	status, body, _ = env.do(t, http.MethodPatch, "/v1/tickets/"+ref, env.humanToken, map[string]any{
 		"version": version, "status": "en revisión",
 	})
-	if status != http.StatusOK {
-		t.Fatalf("PATCH ticket: status=%d body=%v", status, body)
+	if status != http.StatusConflict || body["code"] != "transicion_invalida" {
+		t.Fatalf("PATCH de estado debía fallar: status=%d body=%v", status, body)
+	}
+	status, body, _ = env.do(t, http.MethodPost, "/v1/tickets/"+ref+"/claims", env.humanToken, nil)
+	if status != http.StatusCreated {
+		t.Fatalf("claim: status=%d body=%v", status, body)
 	}
 	status, body, _ = env.do(t, http.MethodPost, "/v1/tickets/"+ref+"/claims", env.humanToken, nil)
 	if status != http.StatusConflict {
-		t.Fatalf("claim de ticket en revisión debía fallar: status=%d body=%v", status, body)
+		t.Fatalf("segundo claim debía fallar: status=%d body=%v", status, body)
 	}
 	status, comment, _ := env.do(t, http.MethodPost, "/v1/tickets/"+ref+"/comments", env.humanToken, map[string]any{
 		"body": "Comentario de prueba", "type": "nota",

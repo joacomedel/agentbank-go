@@ -298,9 +298,13 @@ abierto ──claim──▶ en curso ──avanzar──▶ en revisión ──
 
 ### `PATCH /v1/tickets/{id}`
 
-Requiere `version`. Permite editar `title`, `description`, `status`, `priority`,
+Requiere `version`. Permite editar `title`, `description`, `priority`,
 `assignee_id`, `role`, `phase_id`, `epic_id`, `order_index`, `paths`,
 `discovered_in`. `409 version_conflict` si la versión no coincide.
+
+El estado no se cambia por este endpoint: usar `POST /v1/tickets/{id}/avanzar`
+o `POST /v1/tickets/{id}/revision`. Si se envía un `status` distinto, devuelve
+`409 transicion_invalida`.
 
 ### `POST /v1/tickets/{id}/avanzar`
 
