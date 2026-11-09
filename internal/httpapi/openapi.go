@@ -298,7 +298,7 @@ func openAPISchemas() map[string]any {
 		"Comment":             obj(map[string]any{"id": str(), "ticket_id": str(), "author_id": str(), "author_name": str(), "type": str(), "body": str(), "body_content": ref("Content"), "created_at": date()}),
 		"CommentList":         list("Comment"),
 		"CommentCreate":       obj(map[string]any{"body": str(), "type": str()}, "body"),
-		"TimelineItem":        obj(map[string]any{"id": str(), "type": str(), "author_id": str(), "author_name": str(), "action": str(), "body": str(), "body_content": ref("Content"), "payload": free, "created_at": date()}),
+		"TimelineItem":        obj(map[string]any{"id": str(), "type": str(), "author_id": str(), "author_name": str(), "actor_role": str(), "session_id": str(), "action": str(), "body": str(), "body_content": ref("Content"), "payload": free, "created_at": date()}),
 		"TimelineList":        list("TimelineItem"),
 		"DependencyCreate":    obj(map[string]any{"depends_on": str()}, "depends_on"),
 		"TicketNext":          obj(map[string]any{"project_id": str(), "role": str(), "phase_id": str(), "epic_id": str(), "claim": boolean()}),

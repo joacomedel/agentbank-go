@@ -28,14 +28,16 @@ locales. Si el token del agente no existe, lo crea con
 ```json
 {
   "mcp": {
-    "agentbank": {
-      "type": "local",
-      "command": ["/usr/local/bin/agentbank", "mcp"],
-      "environment": {
-        "AGENTBANK_URL": "http://127.0.0.1:8090",
-        "AGENTBANK_AGENT": "opencode-main",
-        "AGENTBANK_AGENT_ROLE": "orquestador",
-        "AGENTBANK_PROJECT": "API"
+    "servers": {
+      "agentbank": {
+        "type": "local",
+        "command": ["/usr/local/bin/agentbank", "mcp"],
+        "environment": {
+          "AGENTBANK_URL": "http://127.0.0.1:8090",
+          "AGENTBANK_AGENT": "opencode-main",
+          "AGENTBANK_AGENT_ROLE": "orquestador",
+          "AGENTBANK_PROJECT": "API"
+        }
       }
     }
   }
@@ -52,8 +54,10 @@ AGENTBANK_TOKEN='ab_...' scripts/setup-opencode-mcp.py \
   --project API --agent opencode-main --role orquestador
 ```
 
-El script hace login, enrola el agente y escribe la entrada `mcp.agentbank` en
-`~/.config/opencode/opencode.json` sin tokens.
+El script hace login, enrola el agente y escribe la entrada
+`mcp.servers.agentbank` en `~/.config/opencode/opencode.json` sin tokens.
+Para carriles por rol, usá `--no-agent`: el MCP no fija `AGENTBANK_AGENT` y
+usa el `AGENTBANK_TOKEN` que hereda del worker.
 
 ## Protocolo
 

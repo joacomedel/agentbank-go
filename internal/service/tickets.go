@@ -129,6 +129,8 @@ type TimelineItem struct {
 	Type        string                `json:"type"`
 	AuthorID    string                `json:"author_id,omitempty"`
 	AuthorName  string                `json:"author_name,omitempty"`
+	ActorRole   string                `json:"actor_role,omitempty"`
+	SessionID   string                `json:"session_id,omitempty"`
 	Action      string                `json:"action,omitempty"`
 	Body        string                `json:"body,omitempty"`
 	BodyContent domain.ForeignContent `json:"body_content,omitempty"`
@@ -975,8 +977,9 @@ func (s *Service) Timeline(ctx context.Context, actor Identity, ref string, limi
 
 func (s *Service) ticketAuditEvents(ctx context.Context, ticketID string, limit int) ([]TimelineItem, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT a.id, COALESCE(a.actor_id, ''), COALESCE(p.name, ''), a.action,
-		       a.payload, a.created_at
+		SELECT a.id, COALESCE(a.actor_id, ''), COALESCE(p.name, ''),
+		       COALESCE(a.actor_role, ''), COALESCE(a.session_id, ''),
+		       a.action, a.payload, a.created_at
 		FROM audit_events a
 		LEFT JOIN participants p ON p.id = a.actor_id
 		WHERE a.object_type = 'ticket' AND a.object_id = ?
@@ -990,8 +993,9 @@ func (s *Service) ticketAuditEvents(ctx context.Context, ticketID string, limit 
 	for rows.Next() {
 		var item TimelineItem
 		var payload, createdAt string
-		if err := rows.Scan(&item.ID, &item.AuthorID, &item.AuthorName, &item.Action,
-			&payload, &createdAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.AuthorID, &item.AuthorName,
+			&item.ActorRole, &item.SessionID, &item.Action, &payload,
+			&createdAt); err != nil {
 			return nil, fmt.Errorf("escanear timeline: %w", err)
 		}
 		_ = json.Unmarshal([]byte(payload), &item.Payload)

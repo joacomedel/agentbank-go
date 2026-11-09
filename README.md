@@ -120,7 +120,11 @@ agentbank mcp
 - `docs/cli.md`: comandos de la CLI.
 - `docs/mcp.md`: servidor MCP, tools y configuración.
 - `docs/tokens.md`: gestión de token humano y tokens por agente.
+- `docs/subagentes.md`: orquestador/implementador/auditor, carriles por épica
+  y auditoría de cierres.
 - `scripts/setup-opencode-mcp.py`: login + enrolamiento + config MCP de OpenCode.
+- `scripts/smoke_agent_tokens.py`: smoke end-to-end de tokens y `agent_role`.
+- `scripts/install-opencode-assets.py`: instala agentes y skills en OpenCode.
 - `docs/benchmarks.md`: mediciones en el Moto.
 - `docs/deploy.md` y `deploy/`: systemd, límites y backup.
 - `docs/decisions/`: ADRs.

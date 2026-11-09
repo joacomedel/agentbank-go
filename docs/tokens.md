@@ -106,13 +106,15 @@ Config de OpenCode:
 ```json
 {
   "mcp": {
-    "agentbank": {
-      "type": "local",
-      "command": ["/usr/local/bin/agentbank", "mcp"],
-      "environment": {
-        "AGENTBANK_AGENT": "opencode-main",
-        "AGENTBANK_AGENT_ROLE": "orquestador",
-        "AGENTBANK_PROJECT": "API"
+    "servers": {
+      "agentbank": {
+        "type": "local",
+        "command": ["/usr/local/bin/agentbank", "mcp"],
+        "environment": {
+          "AGENTBANK_AGENT": "opencode-main",
+          "AGENTBANK_AGENT_ROLE": "orquestador",
+          "AGENTBANK_PROJECT": "API"
+        }
       }
     }
   }
@@ -123,6 +125,9 @@ Config de OpenCode:
 - Si `tokens/opencode-main.token` no existe, el primer arranque lo crea con
   `human.token`.
 - Para otro agente, usá otro `AGENTBANK_AGENT` en su configuración.
+- Si querés que el MCP use el token heredado de un worker (carriles por rol),
+  generá la config con `--no-agent`: no fija `AGENTBANK_AGENT` y `agentbank mcp`
+  usa `AGENTBANK_TOKEN`.
 
 ## Por qué no un token compartido
 
@@ -130,6 +135,19 @@ Config de OpenCode:
 - No podrías revocar a un agente sin afectar a todos.
 - Los permisos, roles y rate limits serían globales.
 - No podrías investigar un incidente por agente.
+
+## Probarlo
+
+```bash
+cd /root/agentbank-go
+go build -trimpath -ldflags='-s -w' -o bin/agentbank ./cmd/agentbank
+./scripts/smoke_agent_tokens.py
+```
+
+El smoke arranca un server temporal, usa una config temporal y verifica:
+login, init, proyecto, `agent ensure`, `me` con `agent_role`, ticket con
+`created_by_role`, auditoría con `actor_role`, rotación, revocación,
+re-enrolamiento, MCP y baja. No toca tu `~/.config/agentbank` real.
 
 ## Seguridad
 

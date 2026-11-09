@@ -58,6 +58,29 @@ tienen lógica de negocio propia.
 Antes del rediseño eran 5–7 llamadas (listar, obtener, reclamar, comentar,
 cerrar, buscar siguiente).
 
+### 2b. Worker: carril por épica
+
+1. `POST /v1/tickets/siguiente` con `claim=true`, `epic_id=<épica>` y
+   `role=<rol>` → solo tickets de esa épica.
+2. Cerrar con `POST /v1/tickets/{id}/avanzar` y `y_siguiente=true` → próximo
+   ticket del mismo carril.
+3. Cuando devuelve `ticket: null`, el carril terminó (`motivo` explica por qué).
+
+El worker de la CLI ya soporta `--epic` y `--phase`; el `--cmd` puede lanzar
+`opencode run --agent implementador`.
+
+### 2c. Auditor: cierres de una épica
+
+1. `GET /v1/projects/{id}/tickets?status=hecho&epic_id=<épica>&updated_since=…`
+   → cierres nuevos.
+2. `GET /v1/tickets/{id}/timeline` → nota de cierre, eventos, `actor_role` y
+   `session_id`.
+3. `GET /v1/audit?object_id=<id>` → cadena y payload del cierre.
+4. `POST /v1/tickets/{id}/comments` (`type=nota`) para aprobar o
+   `POST /v1/tickets/{id}/avanzar` (`status=abierto`) para reabrir.
+
+**3–4 llamadas por ticket auditado**, más las de verificación en el repo.
+
 ### 3. Worker: detectar trabajo nuevo sin listar todo
 
 - Opción A: `GET /v1/projects/API/tickets?updated_since=<cursor>` → solo tickets

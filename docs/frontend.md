@@ -167,6 +167,8 @@ mismo body/path devuelve la respuesta original.
 - `document`: `id`, `project_id`, `title`, `route`, `type`, `pinned`,
   `current_version`, `hash`, `content_content`.
 - `decision`: `id`, `title`, `status`, `body`, `body_content`.
+- `timeline_item`: `id`, `type`, `author_id`, `author_name`, `actor_role`,
+  `session_id`, `action`, `body`, `payload`, `created_at`.
 - `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `actor_role`,
   `action`,
   `object_type`, `object_id`, `project_id`, `payload`, `hash`, `created_at`.

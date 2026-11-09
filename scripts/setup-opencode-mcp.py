@@ -48,6 +48,11 @@ def main() -> int:
     parser.add_argument("--agent", default="opencode-main")
     parser.add_argument("--role", default="orquestador")
     parser.add_argument("--token", default=os.environ.get("AGENTBANK_TOKEN", ""))
+    parser.add_argument(
+        "--no-agent",
+        action="store_true",
+        help="no fijar AGENTBANK_AGENT; el MCP usa el token heredado (carriles por rol)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -65,12 +70,13 @@ def main() -> int:
     if subprocess.run(login, env=env).returncode != 0:
         return _fail("falló agentbank login")
 
-    ensure = [
-        binary, "agent", "ensure", "--agent", args.agent,
-        "--role", args.role, "--project", args.project,
-    ]
-    if subprocess.run(ensure, env=env).returncode != 0:
-        return _fail("falló agentbank agent ensure")
+    if not args.no_agent:
+        ensure = [
+            binary, "agent", "ensure", "--agent", args.agent,
+            "--role", args.role, "--project", args.project,
+        ]
+        if subprocess.run(ensure, env=env).returncode != 0:
+            return _fail("falló agentbank agent ensure")
 
     path = opencode_config_path()
     config: dict = {}
@@ -80,15 +86,23 @@ def main() -> int:
         except json.JSONDecodeError as exc:
             return _fail(f"opencode.json inválido: {exc}")
     mcp = config.setdefault("mcp", {})
-    mcp["agentbank"] = {
+    servers = mcp.setdefault("servers", {})
+    # Migración desde la forma V1 (`mcp.agentbank`) a la forma V2
+    # (`mcp.servers.agentbank`).
+    legacy = mcp.pop("agentbank", None)
+    if isinstance(legacy, dict) and "agentbank" not in servers:
+        servers["agentbank"] = legacy
+    environment = {
+        "AGENTBANK_URL": args.url,
+        "AGENTBANK_PROJECT": args.project,
+    }
+    if not args.no_agent:
+        environment["AGENTBANK_AGENT"] = args.agent
+        environment["AGENTBANK_AGENT_ROLE"] = args.role
+    servers["agentbank"] = {
         "type": "local",
         "command": [binary, "mcp"],
-        "environment": {
-            "AGENTBANK_URL": args.url,
-            "AGENTBANK_PROJECT": args.project,
-            "AGENTBANK_AGENT": args.agent,
-            "AGENTBANK_AGENT_ROLE": args.role,
-        },
+        "environment": environment,
     }
     rendered = json.dumps(config, indent=2, ensure_ascii=False) + "\n"
     if args.dry_run:
@@ -100,7 +114,10 @@ def main() -> int:
         shutil.copy2(path, backup)
     path.write_text(rendered, encoding="utf-8")
     print(f"OK: MCP configurado en {path}")
-    print(f"Agente: {args.agent} ({args.role}), proyecto {args.project}")
+    if args.no_agent:
+        print(f"Proyecto: {args.project}; el MCP usará AGENTBANK_TOKEN del proceso.")
+    else:
+        print(f"Agente: {args.agent} ({args.role}), proyecto {args.project}")
     print("Reiniciá OpenCode para que cargue el MCP.")
     return 0
 

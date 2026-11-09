@@ -9,9 +9,10 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 - Backend Go + SQLite, sin UI de producto.
 - Etapas **0–7 implementadas**: identidad/auditoría, tickets/cola, fases/épicas,
   mensajes, documentos, operación/hardening, CLI/MCP/worker básico.
-- **52 tests** verdes.
+- **56 tests** verdes.
 - `main` incluye OpenAPI/Swagger, feed incremental `/v1/changes`, CLI y MCP de
-  75 tools sin perfiles, tokens por agente y `agent_role`.
+  75 tools sin perfiles, tokens por agente, `agent_role` y subagentes de
+  OpenCode (orquestador/implementador/auditor).
 - Pendiente: ejecutor `opencode-server`/worktrees del worker, Telegram,
   contratos entre proyectos, bloqueos/escalado y choque de áreas.
 - La UI se construye **fuera de este repo** contra OpenAPI.
@@ -26,8 +27,9 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 6. `docs/api.md`
 7. `docs/mcp-flows.md`
 8. `docs/tokens.md`
-9. `docs/decisions/0004-fases-2-6.md`, `0005-devctl-iteraciones.md` y
-   `0006-tokens-por-agente.md`
+9. `docs/subagentes.md`
+10. `docs/decisions/0004-fases-2-6.md`, `0005-devctl-iteraciones.md` y
+    `0006-tokens-por-agente.md`
 
 ## 3. Flujo de trabajo
 
@@ -133,6 +135,10 @@ estaban en `ListTickets`, `ListPhases` y `listTicketsByQuery`.
 - `agentbank api --method … --path … --body …` es el escape hatch.
 - Detalle: `docs/tokens.md`.
 - Setup OpenCode: `scripts/setup-opencode-mcp.py` (login + ensure + MCP).
+- Agentes/skills: `scripts/install-opencode-assets.py`; ver
+  `docs/subagentes.md`.
+- Compactación de DeepSeek V4.1 Flash a 400k: `compaction.buffer = 600000`
+  en `~/.config/opencode/opencode.json`.
 
 ## 7. Próximos pasos sugeridos
 

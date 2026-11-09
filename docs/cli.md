@@ -177,6 +177,8 @@ agentbank admin dispatch
 ```bash
 agentbank worker --project API --role backend --cmd 'tu-comando' --max 10
 agentbank worker --project API --agent worker-backend --agent-role backend --role backend --cmd 'tu-comando'
+agentbank worker --project API --agent worker-epic --role backend --epic <epic> --cmd 'tu-comando'
+agentbank worker --project API --agent worker-fase --role backend --phase <fase> --cmd 'tu-comando'
 agentbank worker --project API --simulado --max 1
 ```
 
@@ -189,6 +191,8 @@ agentbank worker --project API --simulado --max 1
   `AGENTBANK_TOKEN`, `AGENTBANK_URL` y `AGENTBANK_PROJECT` al comando hijo.
 - `--agent`/`--agent-role` definen la identidad y el rol funcional; si no hay
   token local, se enrola con `human.token`.
+- `--epic`/`--phase` acotan el carril: el worker solo reclama tickets de esa
+  épica o fase. Es la forma recomendada de correr un carril por épica.
 - No implementa `opencode-server` ni `--worktree` todavía.
 
 ### Escape hatch

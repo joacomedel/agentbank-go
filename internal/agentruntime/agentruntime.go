@@ -61,6 +61,9 @@ func Ensure(ctx context.Context, opts Options) (Result, error) {
 		if participantID == "" {
 			return Result{}, fmt.Errorf("participante %q sin id", agent)
 		}
+		if status, _ := existing["status"].(string); status == "baja" {
+			return Result{}, fmt.Errorf("el agente %q está de baja; reactivalo o usá otro nombre", agent)
+		}
 		if role := strings.TrimSpace(opts.Role); role != "" {
 			if _, err := human.Do(ctx, "PATCH", "/v1/participants/"+url.PathEscape(participantID), nil,
 				map[string]any{"agent_role": role}, nil); err != nil {

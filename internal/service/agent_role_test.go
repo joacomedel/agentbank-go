@@ -28,6 +28,7 @@ func TestAgentRoleSnapshotAndParticipantFilters(t *testing.T) {
 	if agent.Participant.AgentRole != "auditor" {
 		t.Fatalf("agent_role=%q", agent.Participant.AgentRole)
 	}
+	agent.SessionID = "ses_agent_test"
 	ticket, err := svc.CreateTicket(context.Background(), agent, project.Project.ID, service.TicketInput{
 		Title: "Ticket del auditor",
 	})
@@ -46,6 +47,20 @@ func TestAgentRoleSnapshotAndParticipantFilters(t *testing.T) {
 	}
 	if actorRole != "auditor" {
 		t.Fatalf("actor_role=%q", actorRole)
+	}
+	timeline, err := svc.Timeline(context.Background(), human, ticket.ID, 50)
+	if err != nil {
+		t.Fatalf("Timeline: %v", err)
+	}
+	foundRole := false
+	for _, item := range timeline {
+		if item.Action == "ticket.crear" && item.ActorRole == "auditor" && item.SessionID != "" {
+			foundRole = true
+			break
+		}
+	}
+	if !foundRole {
+		t.Fatalf("timeline sin actor_role/session_id del auditor: %+v", timeline)
 	}
 	list, _, err := svc.ListParticipants(context.Background(), 50, "", false, "agente", "auditor", "auditor-1")
 	if err != nil {

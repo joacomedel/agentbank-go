@@ -367,3 +367,72 @@ func TestAdvanceTicketWithClosingNoteAndQuestion(t *testing.T) {
 		t.Fatal("no se guardó la nota de cierre")
 	}
 }
+
+func TestTicketNextFiltersByEpicLane(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	human, _ := bootstrap(t, svc)
+	project := createProjectForTickets(t, svc, human, "carril-epica")
+	agent := createAgentForTickets(t, svc, human, "worker-epic", project.Project.ID, domain.PermissionWriter, []string{"backend"})
+
+	phase, err := svc.CreatePhase(context.Background(), human, project.Project.ID, service.PhaseInput{
+		Name: "Fase carril", Key: "fc", OrderIndex: int64Ptr(1),
+	})
+	if err != nil {
+		t.Fatalf("CreatePhase: %v", err)
+	}
+	epicA, err := svc.CreateEpic(context.Background(), human, project.Project.ID, service.EpicInput{
+		Title: "Épica A", Key: "ea", PhaseID: phase.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateEpic A: %v", err)
+	}
+	epicB, err := svc.CreateEpic(context.Background(), human, project.Project.ID, service.EpicInput{
+		Title: "Épica B", Key: "eb", PhaseID: phase.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateEpic B: %v", err)
+	}
+	ticketA, err := svc.CreateTicket(context.Background(), human, project.Project.ID, service.TicketInput{
+		Title: "Ticket A", EpicID: epicA.ID, AssignedRole: "backend",
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket A: %v", err)
+	}
+	ticketB, err := svc.CreateTicket(context.Background(), human, project.Project.ID, service.TicketInput{
+		Title: "Ticket B", EpicID: epicB.ID, AssignedRole: "backend",
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket B: %v", err)
+	}
+
+	nextA, err := svc.TicketNext(context.Background(), agent, service.TicketNextInput{
+		ProjectID: project.Project.ID, EpicID: epicA.ID, Role: "backend", Claim: true,
+	})
+	if err != nil {
+		t.Fatalf("TicketNext A: %v", err)
+	}
+	if nextA.Ticket == nil || nextA.Ticket.ID != ticketA.ID {
+		t.Fatalf("carril A reclamó %+v", nextA.Ticket)
+	}
+	nextB, err := svc.TicketNext(context.Background(), agent, service.TicketNextInput{
+		ProjectID: project.Project.ID, EpicID: epicB.ID, Role: "backend", Claim: true,
+	})
+	if err != nil {
+		t.Fatalf("TicketNext B: %v", err)
+	}
+	if nextB.Ticket == nil || nextB.Ticket.ID != ticketB.ID {
+		t.Fatalf("carril B reclamó %+v", nextB.Ticket)
+	}
+	empty, err := svc.TicketNext(context.Background(), agent, service.TicketNextInput{
+		ProjectID: project.Project.ID, EpicID: epicA.ID, Role: "backend", Claim: true,
+	})
+	if err != nil {
+		t.Fatalf("TicketNext A vacío: %v", err)
+	}
+	if empty.Ticket != nil {
+		t.Fatalf("el carril A devolvió un ticket de otra épica: %+v", empty.Ticket)
+	}
+	if empty.Motive != "sin_candidatos" && empty.Motive != "reclamados" {
+		t.Fatalf("motivo inesperado: %q", empty.Motive)
+	}
+}

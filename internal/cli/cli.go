@@ -70,6 +70,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		cfg.Token = result.Token
+	} else if !shouldEnsureAgent(args[0]) {
+		cfg.Token = cfg.HumanToken
 	} else if cfg.Token == "" {
 		cfg.Token = cfg.HumanToken
 	}
@@ -145,15 +147,18 @@ Uso:
   agentbank import --project ID archivo.json [--dry-run] [--update]
   agentbank audit chains|list|verify
   agentbank admin sweeps|metrics|verify-all|outbox|dispatch
-  agentbank worker [--agent A] [--cmd CMD] [--role R] [--max N]
+  agentbank worker [--agent A] [--cmd CMD] [--role R] [--phase P] [--epic E] [--max N]
 
 Configuración:
-  AGENTBANK_URL       default http://127.0.0.1:8090
-  AGENTBANK_TOKEN     token bearer
-  AGENTBANK_PROJECT   proyecto por defecto
-  ~/.config/agentbank/config.json  {server, project}
-  ~/.config/agentbank/token        token (0600)
-  .agentbank.json                  {server, project} sin secretos`)
+  AGENTBANK_URL          default http://127.0.0.1:8090
+  AGENTBANK_TOKEN        token bearer (o AGENTBANK_HUMAN_TOKEN)
+  AGENTBANK_PROJECT      proyecto por defecto
+  AGENTBANK_AGENT        nombre del agente
+  AGENTBANK_AGENT_ROLE   rol funcional
+  ~/.config/agentbank/config.json           {server, project, agent, agent_role}
+  ~/.config/agentbank/human.token           token humano (0600)
+  ~/.config/agentbank/tokens/<agente>.token token del agente (0600)
+  .agentbank.json                           {server, project, agent, agent_role} sin secretos`)
 }
 
 // LoadConfig expone la configuración para el servidor MCP.
@@ -413,6 +418,8 @@ func runNext(ctx context.Context, cfg Config, args []string, stdout, stderr io.W
 	fs.SetOutput(stderr)
 	project := fs.String("project", cfg.Project, "proyecto")
 	role := fs.String("role", "", "rol")
+	phase := fs.String("phase", "", "limitar a una fase")
+	epic := fs.String("epic", "", "limitar a una épica")
 	claim := fs.Bool("claim", true, "reclamar")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -423,6 +430,12 @@ func runNext(ctx context.Context, cfg Config, args []string, stdout, stderr io.W
 	}
 	if *role != "" {
 		body["role"] = *role
+	}
+	if *phase != "" {
+		body["phase_id"] = *phase
+	}
+	if *epic != "" {
+		body["epic_id"] = *epic
 	}
 	result, err := newClient(cfg).Do(ctx, "POST", "/v1/tickets/siguiente", nil, body, nil)
 	if err != nil {
@@ -1045,6 +1058,8 @@ func runWorker(ctx context.Context, cfg Config, args []string, stdout, stderr io
 	fs.SetOutput(stderr)
 	project := fs.String("project", cfg.Project, "proyecto")
 	role := fs.String("role", "", "rol de trabajo")
+	phase := fs.String("phase", "", "limitar el carril a una fase")
+	epic := fs.String("epic", "", "limitar el carril a una épica")
 	agentName := fs.String("agent", cfg.Agent, "nombre del agente")
 	agentRole := fs.String("agent-role", cfg.AgentRole, "rol funcional del agente")
 	command := fs.String("cmd", "", "comando por ticket")
@@ -1086,6 +1101,12 @@ func runWorker(ctx context.Context, cfg Config, args []string, stdout, stderr io
 		}
 		if *role != "" {
 			body["role"] = *role
+		}
+		if *phase != "" {
+			body["phase_id"] = *phase
+		}
+		if *epic != "" {
+			body["epic_id"] = *epic
 		}
 		result, err := newClient(cfg).Do(ctx, "POST", "/v1/tickets/siguiente", nil, body, nil)
 		if err != nil {

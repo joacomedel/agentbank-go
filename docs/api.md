@@ -306,6 +306,9 @@ ticket, el mensaje creado y `next` si `y_siguiente=true`.
 - `POST /v1/tickets/{id}/comments` con `{"body":"…","type":"comentario|nota|cierre"}`.
 - `GET /v1/tickets/{id}/comments`.
 - `GET /v1/tickets/{id}/timeline`: comentarios + eventos de auditoría del ticket.
+  Cada evento incluye `actor_role` y `session_id`, además de `action` y
+  `payload`. Es la vista recomendada para auditar un cierre sin cruzar varias
+  llamadas.
 
 ### `GET /v1/tickets/listas`
 

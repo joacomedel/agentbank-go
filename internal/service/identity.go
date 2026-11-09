@@ -521,6 +521,9 @@ func (s *Service) RotateToken(ctx context.Context, actor Identity, participantID
 		if err != nil {
 			return err
 		}
+		if target.Status != "activo" {
+			return conflict("participant_disabled", "el participante está de baja")
+		}
 		now := s.now().UTC()
 		rows, err := tx.QueryContext(ctx,
 			`SELECT id FROM tokens WHERE participant_id = ? AND revoked_at IS NULL`,
