@@ -15,6 +15,7 @@ type Message struct {
 	ID                       string
 	ProjectID                string
 	FromParticipantID        string
+	FromRole                 string
 	Type                     string
 	DestinationType          string
 	DestinationParticipantID string
@@ -26,10 +27,12 @@ type Message struct {
 	AssumeDefaultAt          *time.Time
 	Resolution               string
 	ResolvedBy               string
+	ResolvedByRole           string
 	ResolvedAt               *time.Time
 	ResponseOption           *int
 	ResponseText             string
 	TakenBy                  string
+	TakenByRole              string
 	TakenAt                  *time.Time
 	ReplyTo                  string
 	CorrelationID            string

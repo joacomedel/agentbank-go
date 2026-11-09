@@ -57,11 +57,12 @@ func (s *Service) ClaimTicket(ctx context.Context, actor Identity, ref string) (
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO claims(id, ticket_id, participant_id, session_id, status_previo,
-			                   lease_until, last_activity_at, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			                   lease_until, last_activity_at, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			claim.ID, claim.TicketID, claim.ParticipantID, nullable(claim.SessionID),
 			claim.StatusPrevious, timefmt.Format(claim.LeaseUntil),
-			timefmt.Format(claim.LastActivityAt), timefmt.Format(claim.CreatedAt),
+			timefmt.Format(claim.LastActivityAt), actor.Participant.AgentRole,
+			timefmt.Format(claim.CreatedAt),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("claim_conflict", "el ticket ya tiene un claim activo")
@@ -72,8 +73,9 @@ func (s *Service) ClaimTicket(ctx context.Context, actor Identity, ref string) (
 		current.Version++
 		current.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE tickets SET status = ?, version = ?, updated_at = ? WHERE id = ?`,
-			current.Status, current.Version, timefmt.Format(now), current.ID,
+			`UPDATE tickets SET status = ?, version = ?, updated_by_role = ?, updated_at = ? WHERE id = ?`,
+			current.Status, current.Version, actor.Participant.AgentRole,
+			timefmt.Format(now), current.ID,
 		); err != nil {
 			return fmt.Errorf("marcar ticket en curso: %w", err)
 		}
@@ -146,8 +148,9 @@ func (s *Service) ReleaseClaim(ctx context.Context, actor Identity, ref string) 
 		current.Version++
 		current.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE tickets SET status = ?, version = ?, updated_at = ? WHERE id = ?`,
-			current.Status, current.Version, timefmt.Format(now), current.ID,
+			`UPDATE tickets SET status = ?, version = ?, updated_by_role = ?, updated_at = ? WHERE id = ?`,
+			current.Status, current.Version, actor.Participant.AgentRole,
+			timefmt.Format(now), current.ID,
 		); err != nil {
 			return fmt.Errorf("restaurar ticket: %w", err)
 		}
@@ -281,7 +284,7 @@ func (s *Service) SweepExpiredClaims(ctx context.Context) (int, error) {
 				return fmt.Errorf("liberar claim vencido: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx, `
-				UPDATE tickets SET status = ?, version = version + 1, updated_at = ?
+				UPDATE tickets SET status = ?, version = version + 1, updated_by_role = '', updated_at = ?
 				WHERE id = ? AND status = 'en curso'`,
 				item.statusPrevious, timefmt.Format(now), item.ticketID,
 			); err != nil {

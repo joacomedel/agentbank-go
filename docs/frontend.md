@@ -149,24 +149,30 @@ mismo body/path devuelve la respuesta original.
 
 ## 3. Modelo de datos para la UI
 
-- `project`: `id`, `slug`, `name`, `prefix`, `version`, `permission`, `roles`.
-- `participant`: `id`, `name`, `type`, `status`, `agent_role`, `admin`,
-  `created_at`.
-- `membership`: `participant_id`, `project_id`, `permission`, `roles`.
+- `project`: `id`, `slug`, `name`, `prefix`, `version`, `permission`, `roles`,
+  `created_by`, `created_by_role`.
+- `participant`: `id`, `name`, `type`, `status`, `agent_role`, `created_by`,
+  `created_by_role`, `admin`, `created_at`.
+- `membership`: `participant_id`, `project_id`, `permission`, `roles`,
+  `granted_by`, `granted_by_role`.
 - `project_role`: `name`, `members`, `created_at`.
 - `ticket`: `id`, `ref`, `number`, `key`, `title`, `description`,
   `description_content`, `status`, `effective_status`, `priority`,
   `assignee_id`, `role`, `phase_id`, `epic_id`, `version`, `paths`,
-  `discovered_in`, `created_by`, `created_by_role`, `dependencies`,
-  `dependents`, `claims`.
-- `phase`: `id`, `key`, `name`, `order_index`, `status`, `progress`.
-- `epic`: `id`, `phase_id`, `key`, `title`, `order_index`, `status`.
+  `discovered_in`, `created_by`, `created_by_role`, `updated_by_role`,
+  `dependencies`, `dependents`, `claims`.
+- `phase`: `id`, `key`, `name`, `order_index`, `status`, `created_by_role`,
+  `progress`.
+- `epic`: `id`, `phase_id`, `key`, `title`, `order_index`, `status`,
+  `created_by_role`.
 - `message`: `id`, `type`, `destination_type`, `subject`, `body`,
   `body_content`, `options`, `default_option`, `resolution`, `state`,
-  `affects`, `refs`.
+  `from_role`, `resolved_by_role`, `taken_by_role`, `affects`, `refs`.
 - `document`: `id`, `project_id`, `title`, `route`, `type`, `pinned`,
-  `current_version`, `hash`, `content_content`.
-- `decision`: `id`, `title`, `status`, `body`, `body_content`.
+  `current_version`, `hash`, `content_content`, `created_by_role`,
+  `author_role`.
+- `decision`: `id`, `title`, `status`, `body`, `body_content`,
+  `created_by_role`.
 - `timeline_item`: `id`, `type`, `author_id`, `author_name`, `actor_role`,
   `session_id`, `action`, `body`, `payload`, `created_at`.
 - `audit_event`: `seq`, `chain_id`, `actor_type`, `actor_id`, `actor_role`,

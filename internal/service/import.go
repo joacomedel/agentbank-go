@@ -128,10 +128,10 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 			}
 			phaseID := id.New()
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO phases(id, project_id, key, name, description, order_index, status, created_by, created_at)
-				VALUES (?, ?, ?, ?, ?, ?, 'abierta', ?, ?)`,
+				INSERT INTO phases(id, project_id, key, name, description, order_index, status, created_by, created_by_role, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, 'abierta', ?, ?, ?)`,
 				phaseID, project.ID, nullable(key), name, phase.Description, order,
-				actor.Participant.ID, timefmt.Format(now),
+				actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 			); err != nil {
 				return fmt.Errorf("importar fase: %w", err)
 			}
@@ -192,10 +192,10 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 			}
 			epicID := id.New()
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO epics(id, project_id, phase_id, key, title, description, order_index, status, created_by, created_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, 'abierta', ?, ?)`,
+				INSERT INTO epics(id, project_id, phase_id, key, title, description, order_index, status, created_by, created_by_role, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, 'abierta', ?, ?, ?)`,
 				epicID, project.ID, nullable(phaseID), nullable(key), title, epic.Description,
-				order, actor.Participant.ID, timefmt.Format(now),
+				order, actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 			); err != nil {
 				return fmt.Errorf("importar épica: %w", err)
 			}
@@ -323,12 +323,12 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 				if _, err := tx.ExecContext(ctx, `
 					UPDATE tickets SET title = ?, description = ?, status = ?, priority = ?,
 					       assigned_role = ?, phase_id = ?, epic_id = ?, order_index = ?,
-					       version = ?, paths = ?, updated_at = ?
+					       version = ?, paths = ?, updated_by_role = ?, updated_at = ?
 					WHERE id = ?`,
 					existing.Title, existing.Description, existing.Status, existing.Priority,
 					nullable(existing.AssignedRole), nullable(existing.PhaseID), nullable(existing.EpicID),
 					existing.OrderIndex, existing.Version, mustJSON(existing.Paths),
-					timefmt.Format(now), existing.ID,
+					actor.Participant.AgentRole, timefmt.Format(now), existing.ID,
 				); err != nil {
 					return fmt.Errorf("actualizar ticket importado: %w", err)
 				}
@@ -347,12 +347,13 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 				if _, err := tx.ExecContext(ctx, `
 					INSERT INTO tickets
 						(id, project_id, number, key, title, description, status, priority,
-						 assigned_role, phase_id, epic_id, order_index, version, paths, created_by, created_by_role, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+						 assigned_role, phase_id, epic_id, order_index, version, paths, created_by, created_by_role, updated_by_role, created_at, updated_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
 					ticketID, project.ID, nextNumber, nullable(key), title, ticket.Description,
 					status, priority, nullable(role), nullable(phaseID), nullable(epicID),
 					int64Value(ticket.OrderIndex), mustJSON(paths), actor.Participant.ID,
-					actor.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
+					actor.Participant.AgentRole, actor.Participant.AgentRole,
+					timefmt.Format(now), timefmt.Format(now),
 				); err != nil {
 					return fmt.Errorf("importar ticket: %w", err)
 				}
@@ -411,8 +412,9 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 					return validation("un ticket no puede depender de sí mismo")
 				}
 				if _, err := tx.ExecContext(ctx, `
-					INSERT OR IGNORE INTO ticket_edges(ticket_id, depends_on_id, created_by, created_at)
-					VALUES (?, ?, ?, ?)`, ticketID, depID, actor.Participant.ID, timefmt.Format(now),
+					INSERT OR IGNORE INTO ticket_edges(ticket_id, depends_on_id, created_by, created_by_role, created_at)
+					VALUES (?, ?, ?, ?, ?)`, ticketID, depID, actor.Participant.ID,
+					actor.Participant.AgentRole, timefmt.Format(now),
 				); err != nil {
 					return fmt.Errorf("importar dependencia: %w", err)
 				}
@@ -461,14 +463,14 @@ func (s *Service) ImportPlan(ctx context.Context, actor Identity, projectRef str
 func phaseByKey(ctx context.Context, q queryer, projectID, key string) (domain.Phase, error) {
 	return scanPhase(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(key, ''), name, description, order_index, status,
-		       COALESCE(created_by, ''), created_at, closed_at
+		       COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM phases WHERE project_id = ? AND key = ?`, projectID, key))
 }
 
 func epicByKey(ctx context.Context, q queryer, projectID, key string) (domain.Epic, error) {
 	return scanEpic(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(phase_id, ''), COALESCE(key, ''), title, description,
-		       order_index, status, COALESCE(created_by, ''), created_at, closed_at
+		       order_index, status, COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM epics WHERE project_id = ? AND key = ?`, projectID, key))
 }
 
@@ -477,7 +479,7 @@ func ticketByKey(ctx context.Context, q queryer, projectID, key string) (domain.
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE project_id = ? AND key = ?`, projectID, key))
 }

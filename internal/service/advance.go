@@ -110,8 +110,9 @@ func (s *Service) AdvanceTicket(ctx context.Context, actor Identity, ref string,
 		current.Version++
 		current.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE tickets SET status = ?, version = ?, updated_at = ? WHERE id = ?`,
-			current.Status, current.Version, timefmt.Format(now), current.ID,
+			`UPDATE tickets SET status = ?, version = ?, updated_by_role = ?, updated_at = ? WHERE id = ?`,
+			current.Status, current.Version, actor.Participant.AgentRole,
+			timefmt.Format(now), current.ID,
 		); err != nil {
 			return fmt.Errorf("avanzar ticket: %w", err)
 		}
@@ -164,9 +165,10 @@ func insertTicketCommentTx(ctx context.Context, tx *sql.Tx, actor Identity, tick
 	}
 	commentID := id.New()
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO comments(id, ticket_id, author_participant_id, type, body, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)`,
-		commentID, ticketID, actor.Participant.ID, commentType, body, timefmt.Format(now),
+		INSERT INTO comments(id, ticket_id, author_participant_id, author_role, type, body, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		commentID, ticketID, actor.Participant.ID, actor.Participant.AgentRole,
+		commentType, body, timefmt.Format(now),
 	); err != nil {
 		return "", fmt.Errorf("crear comentario: %w", err)
 	}
@@ -222,17 +224,19 @@ func (s *Service) createAdvanceMessageTx(ctx context.Context, tx *sql.Tx, actor 
 	optionsJSON, _ := json.Marshal(options)
 	message := domain.Message{
 		ID: messageID, ProjectID: project.ID, FromParticipantID: actor.Participant.ID,
-		Type: "solicitud", DestinationType: destinationType,
+		FromRole: actor.Participant.AgentRole,
+		Type:     "solicitud", DestinationType: destinationType,
 		DestinationRole: destinationRole, Subject: subject, Body: body,
 		Options: options, DefaultOption: defaultOption, CreatedAt: now,
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO messages
-			(id, project_id, from_participant_id, type, destination_type,
+			(id, project_id, from_participant_id, from_role, type, destination_type,
 			 destination_participant_id, destination_role, subject, body, options,
 			 default_option, created_at)
-		VALUES (?, ?, ?, 'solicitud', ?, ?, ?, ?, ?, ?, ?, ?)`,
-		message.ID, project.ID, actor.Participant.ID, destinationType,
+		VALUES (?, ?, ?, ?, 'solicitud', ?, ?, ?, ?, ?, ?, ?, ?)`,
+		message.ID, project.ID, actor.Participant.ID, actor.Participant.AgentRole,
+		destinationType,
 		nullable(question.DestinationParticipantID), nullable(destinationRole),
 		message.Subject, message.Body, string(optionsJSON), nullableInt(defaultOption),
 		timefmt.Format(now),

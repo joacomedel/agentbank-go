@@ -98,7 +98,7 @@ func (s *Service) Briefing(ctx context.Context, actor Identity, projectRef strin
 func (s *Service) pinnedDocuments(ctx context.Context, actor Identity, projectID string) ([]DocumentView, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, COALESCE(project_id, ''), title, COALESCE(route, ''), type, pinned,
-		       current_version, COALESCE(created_by, ''), created_at, updated_at
+		       current_version, COALESCE(created_by, ''), created_by_role, created_at, updated_at
 		FROM documents
 		WHERE pinned = 1 AND (project_id = ? OR project_id IS NULL)
 		ORDER BY project_id DESC, title LIMIT 20`, projectID)
@@ -331,7 +331,7 @@ func (s *Service) Tablero(ctx context.Context, actor Identity, projectRef string
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE project_id = ? AND phase_id IS NULL AND epic_id IS NULL
 		ORDER BY order_index, created_at`, project.ID)

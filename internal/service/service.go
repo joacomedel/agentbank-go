@@ -146,7 +146,9 @@ func scanParticipant(row interface{ Scan(...any) error }) (domain.Participant, e
 	var participant domain.Participant
 	var admin int
 	var createdAt string
-	if err := row.Scan(&participant.ID, &participant.Type, &participant.Name, &participant.Status, &participant.AgentRole, &admin, &createdAt); err != nil {
+	if err := row.Scan(&participant.ID, &participant.Type, &participant.Name,
+		&participant.Status, &participant.AgentRole, &participant.CreatedBy,
+		&participant.CreatedByRole, &admin, &createdAt); err != nil {
 		return domain.Participant{}, fmt.Errorf("escanear participante: %w", err)
 	}
 	participant.Admin = admin == 1
@@ -162,7 +164,8 @@ func scanProject(row interface{ Scan(...any) error }) (domain.Project, error) {
 	var project domain.Project
 	var createdAt, updatedAt string
 	if err := row.Scan(&project.ID, &project.Slug, &project.Name, &project.Prefix,
-		&project.Version, &createdAt, &updatedAt); err != nil {
+		&project.Version, &project.CreatedBy, &project.CreatedByRole,
+		&createdAt, &updatedAt); err != nil {
 		return domain.Project{}, fmt.Errorf("escanear proyecto: %w", err)
 	}
 	parsedCreated, err := timefmt.Parse(createdAt)
@@ -180,7 +183,9 @@ func scanProject(row interface{ Scan(...any) error }) (domain.Project, error) {
 
 func getParticipant(ctx context.Context, q queryer, participantID string) (domain.Participant, error) {
 	participant, err := scanParticipant(q.QueryRowContext(ctx, `
-		SELECT id, type, name, status, agent_role, admin, created_at FROM participants WHERE id = ?`,
+		SELECT id, type, name, status, agent_role, COALESCE(created_by, ''),
+		       created_by_role, admin, created_at
+		FROM participants WHERE id = ?`,
 		participantID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Participant{}, notFound("participant_not_found", "participante no encontrado")
@@ -206,14 +211,16 @@ func (s *Service) Authenticate(ctx context.Context, plainToken string) (Identity
 	var createdAt string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT t.id, t.token_hash, t.revoked_at,
-		       p.id, p.type, p.name, p.agent_role, p.admin, p.status, p.created_at
+		       p.id, p.type, p.name, p.agent_role, COALESCE(p.created_by, ''),
+		       p.created_by_role, p.admin, p.status, p.created_at
 		FROM tokens t
 		JOIN participants p ON p.id = t.participant_id
 		WHERE t.token_hash = ?`, computed,
 	).Scan(
 		&identity.TokenID, &hash, &revokedAt,
 		&identity.Participant.ID, &identity.Participant.Type, &identity.Participant.Name,
-		&identity.Participant.AgentRole, &admin, &status, &createdAt,
+		&identity.Participant.AgentRole, &identity.Participant.CreatedBy,
+		&identity.Participant.CreatedByRole, &admin, &status, &createdAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Identity{}, ErrInvalidToken
@@ -263,10 +270,10 @@ func (s *Service) OpenSession(ctx context.Context, identity Identity, sessionID,
 		created = id.New()
 		now := s.now().UTC()
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO sessions(id, participant_id, token_id, origin, started_at, last_seen_at)
-			VALUES (?, ?, ?, ?, ?, ?)`,
+			INSERT INTO sessions(id, participant_id, token_id, origin, agent_role, started_at, last_seen_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			created, identity.Participant.ID, identity.TokenID, origin,
-			timefmt.Format(now), timefmt.Format(now),
+			identity.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear sesión: %w", err)
 		}

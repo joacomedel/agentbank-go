@@ -96,10 +96,19 @@ Qué **no** copiar:
 |---|---|---|---|---|
 | `orquestador` | `primary` | flash `#high` | todo menos push/merge | Planifica fase/épica, crea tickets, lanza carriles |
 | `implementador` | `all` | flash `#high` | edita, shell, sin push/merge, sin subagentes | Trabaja una épica ticket por ticket |
-| `auditor` | `all` | flash `#max` | solo lectura, `git`/`go test`/`agentbank` | Verifica cierres y reabre |
+| `auditor` | `all` | flash `#max` | código de solo lectura; MCP de AgentBank con escritura | Verifica cierres, comenta, reabre y crea seguimiento |
+
+Todos usan **DeepSeek V4.1 Flash**. El auditor usa el variant `max` del mismo
+modelo; el resumen de compactación también usa Flash.
 
 Los archivos están en `opencode/agents/`. El instalador los copia a
 `~/.config/opencode/agents/`.
+
+**Todos los roles pueden escribir tickets.** El MCP de AgentBank expone
+`ticket_create`, `ticket_edit`, `ticket_advance`, `ticket_comment`,
+`ticket_claim`, `ticket_release`, `ticket_depend`, `ticket_attach_document`,
+`messages_send` y `document_create`. Los permisos de archivo del auditor no
+bloquean esas tools: solo le impiden editar código.
 
 ### Carril por épica
 
@@ -209,17 +218,28 @@ orquestador es el único que escribe y los subagentes son “manos” efímeras.
 En ese caso, la trazabilidad fina queda en el timeline y en el comentario de
 cierre, no en `created_by_role`.
 
+En cualquiera de los tres modos, **todos los roles pueden crear/editar/cerrar
+tickets**: lo que cambia es a nombre de qué participante queda el snapshot del
+rol.
+
 ## 6. Auditar cómo se cerró un ticket
 
-AgentBank ya guarda lo necesario:
+AgentBank guarda el rol del actor en **cada creación y cambio**:
 
-- `tickets.created_by` y `tickets.created_by_role`: autor y rol al crear.
-- `audit_events.actor_role` y `audit_events.session_id`: rol y sesión en cada
-  evento.
-- Timeline del ticket: comentarios + eventos.
+- Proyecto/participante/membresía: `created_by_role` / `granted_by_role`.
+- Fase/épica/ticket: `created_by_role`; el ticket además `updated_by_role`.
+- Comentario: `author_role`.
+- Mensaje: `from_role`, `resolved_by_role`, `taken_by_role`.
+- Documento/versión: `created_by_role`, `author_role`.
+- Decisión/webhook/claim/dependencia: `created_by_role`.
+- Evento de auditoría: `actor_role` y `session_id` en cada cambio.
+- Timeline del ticket: comentarios + eventos con rol y sesión.
 - Comentario de tipo `cierre` con la nota de cierre.
 - Cadena de auditoría verificable (`audit_verify`).
-- Documentos adjuntos al ticket.
+
+El histórico completo de cualquier objeto se consulta con
+`GET /v1/audit?object_id=<id>`. Cambiar el `agent_role` de un agente no
+reescribe los snapshots viejos.
 
 ### Flujo del auditor
 
@@ -258,6 +278,11 @@ Para compactar a los **400.000**:
 
 ```json
 {
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "small_model": "opencode-go/deepseek-v4.1-flash",
+  "agents": {
+    "compaction": { "model": "opencode-go/deepseek-v4.1-flash" }
+  },
   "compaction": {
     "auto": true,
     "keep": { "tokens": 24000 },

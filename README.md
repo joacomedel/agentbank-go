@@ -20,8 +20,8 @@ Etapas 1–6 implementadas (backend HTTP):
 
 - **Identidad**: bootstrap del humano, proyectos, participantes humano/agente,
   membresías, roles por proyecto, tokens hasheados sin expiración, rotación,
-  revocación y baja, sesiones, tokens por agente con auto-enrolamiento y
-  `agent_role` funcional.
+  revocación y baja, sesiones, tokens por agente con auto-enrolamiento,
+  `agent_role` funcional y snapshot del rol en cada creación/cambio.
 - **Tickets**: CRUD, estados, prioridad, versión, dependencias con detección de
   ciclos, claims con lease, `ticket_siguiente`, comentarios, timeline, IDs
   `PREFIX-N`, `ticket_avanzar` con nota y pregunta.

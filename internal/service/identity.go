@@ -108,18 +108,21 @@ func (s *Service) Bootstrap(ctx context.Context, bootstrapToken string) (Bootstr
 
 // MembershipView es una membresía con datos de proyecto para /v1/me.
 type MembershipView struct {
-	ProjectID   string    `json:"project_id"`
-	ProjectSlug string    `json:"project_slug"`
-	ProjectName string    `json:"project_name"`
-	Permission  string    `json:"permission"`
-	Roles       []string  `json:"roles"`
-	CreatedAt   time.Time `json:"created_at"`
+	ProjectID     string    `json:"project_id"`
+	ProjectSlug   string    `json:"project_slug"`
+	ProjectName   string    `json:"project_name"`
+	Permission    string    `json:"permission"`
+	Roles         []string  `json:"roles"`
+	GrantedBy     string    `json:"granted_by,omitempty"`
+	GrantedByRole string    `json:"granted_by_role,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // Me devuelve el participante autenticado y sus membresías.
 func (s *Service) Me(ctx context.Context, identity Identity) ([]MembershipView, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT m.project_id, p.slug, p.name, m.permission, m.roles, m.created_at
+		SELECT m.project_id, p.slug, p.name, m.permission, m.roles,
+		       COALESCE(m.granted_by, ''), m.granted_by_role, m.created_at
 		FROM memberships m
 		JOIN projects p ON p.id = m.project_id
 		WHERE m.participant_id = ?
@@ -134,7 +137,8 @@ func (s *Service) Me(ctx context.Context, identity Identity) ([]MembershipView, 
 		var view MembershipView
 		var rolesJSON, createdAt string
 		if err := rows.Scan(&view.ProjectID, &view.ProjectSlug, &view.ProjectName,
-			&view.Permission, &rolesJSON, &createdAt); err != nil {
+			&view.Permission, &rolesJSON, &view.GrantedBy, &view.GrantedByRole,
+			&createdAt); err != nil {
 			return nil, fmt.Errorf("escanear membresía: %w", err)
 		}
 		if err := json.Unmarshal([]byte(rolesJSON), &view.Roles); err != nil {
@@ -238,18 +242,22 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		now := s.now().UTC()
 		created.Participant = domain.Participant{
-			ID:        id.New(),
-			Type:      participantType,
-			Name:      name,
-			Status:    "activo",
-			AgentRole: agentRole,
-			Admin:     input.Admin,
-			CreatedAt: now,
+			ID:            id.New(),
+			Type:          participantType,
+			Name:          name,
+			Status:        "activo",
+			AgentRole:     agentRole,
+			CreatedBy:     actor.Participant.ID,
+			CreatedByRole: actor.Participant.AgentRole,
+			Admin:         input.Admin,
+			CreatedAt:     now,
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO participants(id, type, name, agent_role, admin, created_at)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			created.Participant.ID, participantType, name, agentRole, boolInt(input.Admin), timefmt.Format(now),
+			INSERT INTO participants(id, type, name, agent_role, created_by, created_by_role, admin, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			created.Participant.ID, participantType, name, agentRole,
+			created.Participant.CreatedBy, created.Participant.CreatedByRole,
+			boolInt(input.Admin), timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("participant_name_taken", "ya existe un participante con ese name")
@@ -263,9 +271,10 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 		created.Token = token
 		created.TokenID = id.New()
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO tokens(id, participant_id, token_hash, created_at)
-			VALUES (?, ?, ?, ?)`,
-			created.TokenID, created.Participant.ID, auth.HashToken(token), timefmt.Format(now),
+			INSERT INTO tokens(id, participant_id, token_hash, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?)`,
+			created.TokenID, created.Participant.ID, auth.HashToken(token),
+			actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear token: %w", err)
 		}
@@ -316,9 +325,10 @@ func (s *Service) CreateParticipant(ctx context.Context, actor Identity, input P
 				return err
 			}
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO memberships(participant_id, project_id, permission, roles, created_at)
-				VALUES (?, ?, ?, ?, ?)`,
-				created.Participant.ID, resolved.ID, project.Permission, rolesJSON, timefmt.Format(now),
+				INSERT INTO memberships(participant_id, project_id, permission, roles, granted_by, granted_by_role, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				created.Participant.ID, resolved.ID, project.Permission, rolesJSON,
+				actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 			); err != nil {
 				if isUniqueConstraint(err) {
 					return conflict("membership_exists", "la membresía ya existe")
@@ -385,7 +395,8 @@ func (s *Service) ListParticipants(ctx context.Context, limit int, cursor string
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, type, name, status, agent_role, admin, created_at
+		SELECT id, type, name, status, agent_role, COALESCE(created_by, ''),
+		       created_by_role, admin, created_at
 		FROM participants `+where+`
 		ORDER BY name ASC
 		LIMIT ?`, args...)
@@ -575,9 +586,10 @@ func (s *Service) RotateToken(ctx context.Context, actor Identity, participantID
 		}
 		tokenID = id.New()
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO tokens(id, participant_id, token_hash, created_at)
-			VALUES (?, ?, ?, ?)`,
-			tokenID, target.ID, auth.HashToken(token), timefmt.Format(now),
+			INSERT INTO tokens(id, participant_id, token_hash, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?)`,
+			tokenID, target.ID, auth.HashToken(token), actor.Participant.AgentRole,
+			timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear token: %w", err)
 		}

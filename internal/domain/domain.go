@@ -17,24 +17,28 @@ const (
 
 // Participant es un humano o agente. Admin significa admin de instancia.
 type Participant struct {
-	ID        string
-	Type      string
-	Name      string
-	Status    string
-	AgentRole string
-	Admin     bool
-	CreatedAt time.Time
+	ID            string
+	Type          string
+	Name          string
+	Status        string
+	AgentRole     string
+	CreatedBy     string
+	CreatedByRole string
+	Admin         bool
+	CreatedAt     time.Time
 }
 
 // Project es un proyecto con slug y prefijo únicos.
 type Project struct {
-	ID        string
-	Slug      string
-	Name      string
-	Prefix    string
-	Version   int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            string
+	Slug          string
+	Name          string
+	Prefix        string
+	Version       int64
+	CreatedBy     string
+	CreatedByRole string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Membership representa el permiso y los roles de un participante en un
@@ -44,6 +48,8 @@ type Membership struct {
 	ProjectID     string
 	Permission    string
 	Roles         []string
+	GrantedBy     string
+	GrantedByRole string
 	CreatedAt     time.Time
 }
 
@@ -62,6 +68,8 @@ type Member struct {
 	Admin         bool
 	Permission    string
 	Roles         []string
+	GrantedBy     string
+	GrantedByRole string
 	CreatedAt     time.Time
 }
 
@@ -70,6 +78,7 @@ type Token struct {
 	ID            string
 	ParticipantID string
 	TokenHash     string
+	CreatedByRole string
 	CreatedAt     time.Time
 	RevokedAt     *time.Time
 }
@@ -80,6 +89,7 @@ type Session struct {
 	ParticipantID string
 	TokenID       string
 	Origin        string
+	AgentRole     string
 	StartedAt     time.Time
 	LastSeenAt    time.Time
 }

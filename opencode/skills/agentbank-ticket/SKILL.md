@@ -7,8 +7,10 @@ description: Reclamar, implementar, verificar y cerrar un ticket de AgentBank co
 
 ## Herramientas
 
-Las tools MCP se llaman `agentbank_<tool>` (servidor `agentbank`). Si no están
-disponibles, usá la CLI `agentbank`.
+Las tools MCP se llaman `agentbank_<tool>` (servidor `agentbank`). **El MCP
+puede leer y escribir**: crear/editar/cerrar tickets, comentar, mensajes y
+documentos. El rol no limita las tools MCP; los permisos de archivo son aparte.
+Si el MCP no está disponible, usá la CLI `agentbank`.
 
 | Acción | MCP | CLI |
 |---|---|---|

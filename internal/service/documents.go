@@ -42,6 +42,8 @@ type DocumentView struct {
 	ContentContent domain.ForeignContent `json:"content_content"`
 	AuthorID       string                `json:"author_id,omitempty"`
 	AuthorName     string                `json:"author_name,omitempty"`
+	AuthorRole     string                `json:"author_role,omitempty"`
+	CreatedByRole  string                `json:"created_by_role,omitempty"`
 	CreatedAt      time.Time             `json:"created_at"`
 	UpdatedAt      time.Time             `json:"updated_at"`
 }
@@ -56,6 +58,7 @@ type DocumentVersionView struct {
 	ContentContent domain.ForeignContent `json:"content_content"`
 	AuthorID       string                `json:"author_id,omitempty"`
 	AuthorName     string                `json:"author_name,omitempty"`
+	AuthorRole     string                `json:"author_role,omitempty"`
 	CreatedAt      time.Time             `json:"created_at"`
 }
 
@@ -140,14 +143,14 @@ func (s *Service) createDocumentTx(ctx context.Context, tx *sql.Tx, actor Identi
 	doc := domain.Document{
 		ID: id.New(), ProjectID: projectID, Title: title, Route: route, Type: docType,
 		Pinned: pinned, CurrentVersion: 1, CreatedBy: actor.Participant.ID,
-		CreatedAt: now, UpdatedAt: now,
+		CreatedByRole: actor.Participant.AgentRole, CreatedAt: now, UpdatedAt: now,
 	}
 	hash := hashContent(content)
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO documents(id, project_id, title, route, type, pinned, current_version, created_by, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+		INSERT INTO documents(id, project_id, title, route, type, pinned, current_version, created_by, created_by_role, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
 		doc.ID, nullable(projectID), title, nullable(route), docType, boolInt(pinned),
-		actor.Participant.ID, timefmt.Format(now), timefmt.Format(now),
+		actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
 	); err != nil {
 		if isUniqueConstraint(err) {
 			return DocumentView{}, conflict("document_route_taken", "ya existe un documento con esa route")
@@ -155,9 +158,10 @@ func (s *Service) createDocumentTx(ctx context.Context, tx *sql.Tx, actor Identi
 		return DocumentView{}, fmt.Errorf("crear documento: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO document_versions(id, document_id, version, content, hash, author_participant_id, created_at)
-		VALUES (?, ?, 1, ?, ?, ?, ?)`,
-		id.New(), doc.ID, content, hash, actor.Participant.ID, timefmt.Format(now),
+		INSERT INTO document_versions(id, document_id, version, content, hash, author_participant_id, author_role, created_at)
+		VALUES (?, ?, 1, ?, ?, ?, ?, ?)`,
+		id.New(), doc.ID, content, hash, actor.Participant.ID,
+		actor.Participant.AgentRole, timefmt.Format(now),
 	); err != nil {
 		return DocumentView{}, fmt.Errorf("crear versión inicial: %w", err)
 	}
@@ -174,7 +178,8 @@ func (s *Service) createDocumentTx(ctx context.Context, tx *sql.Tx, actor Identi
 		ID: doc.ID, ProjectID: projectID, Title: title, Route: route, Type: docType,
 		Pinned: pinned, CurrentVersion: 1, Version: 1, Hash: hash, Content: content,
 		ContentContent: domain.WrapForeign(content, "document"), AuthorID: actor.Participant.ID,
-		AuthorName: actor.Participant.Name, CreatedAt: now, UpdatedAt: now,
+		AuthorName: actor.Participant.Name, AuthorRole: actor.Participant.AgentRole,
+		CreatedByRole: actor.Participant.AgentRole, CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
 
@@ -250,7 +255,7 @@ func (s *Service) ListDocuments(ctx context.Context, actor Identity, projectRef 
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT d.id, COALESCE(d.project_id, ''), d.title, COALESCE(d.route, ''), d.type,
-		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_at, d.updated_at
+		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_by_role, d.created_at, d.updated_at
 		FROM documents d
 		WHERE `+strings.Join(conditions, " AND ")+`
 		ORDER BY `+order+`
@@ -341,9 +346,10 @@ func (s *Service) createDocumentVersionTx(ctx context.Context, tx *sql.Tx, actor
 	now := s.now().UTC()
 	version := doc.CurrentVersion + 1
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO document_versions(id, document_id, version, content, hash, author_participant_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id.New(), doc.ID, version, content, hash, actor.Participant.ID, timefmt.Format(now),
+		INSERT INTO document_versions(id, document_id, version, content, hash, author_participant_id, author_role, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id.New(), doc.ID, version, content, hash, actor.Participant.ID,
+		actor.Participant.AgentRole, timefmt.Format(now),
 	); err != nil {
 		return DocumentView{}, fmt.Errorf("crear versión: %w", err)
 	}
@@ -368,7 +374,8 @@ func (s *Service) createDocumentVersionTx(ctx context.Context, tx *sql.Tx, actor
 		ID: doc.ID, ProjectID: doc.ProjectID, Title: doc.Title, Route: doc.Route, Type: doc.Type,
 		Pinned: doc.Pinned, CurrentVersion: version, Version: version, Hash: hash, Content: content,
 		ContentContent: domain.WrapForeign(content, "document"), AuthorID: actor.Participant.ID,
-		AuthorName: actor.Participant.Name, CreatedAt: doc.CreatedAt, UpdatedAt: now,
+		AuthorName: actor.Participant.Name, AuthorRole: actor.Participant.AgentRole,
+		CreatedByRole: doc.CreatedByRole, CreatedAt: doc.CreatedAt, UpdatedAt: now,
 	}, nil
 }
 
@@ -387,7 +394,7 @@ func (s *Service) ListDocumentVersions(ctx context.Context, actor Identity, ref 
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT v.id, v.document_id, v.version, v.hash, v.content,
-		       v.author_participant_id, COALESCE(p.name, ''), v.created_at
+		       v.author_participant_id, COALESCE(p.name, ''), v.author_role, v.created_at
 		FROM document_versions v
 		LEFT JOIN participants p ON p.id = v.author_participant_id
 		WHERE v.document_id = ?
@@ -401,7 +408,7 @@ func (s *Service) ListDocumentVersions(ctx context.Context, actor Identity, ref 
 		var view DocumentVersionView
 		var createdAt string
 		if err := rows.Scan(&view.ID, &view.DocumentID, &view.Version, &view.Hash, &view.Content,
-			&view.AuthorID, &view.AuthorName, &createdAt); err != nil {
+			&view.AuthorID, &view.AuthorName, &view.AuthorRole, &createdAt); err != nil {
 			return nil, fmt.Errorf("escanear versión: %w", err)
 		}
 		parsed, err := timefmt.Parse(createdAt)
@@ -554,9 +561,10 @@ func (s *Service) CreateDecision(ctx context.Context, actor Identity, projectRef
 			}
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO decisions(id, project_id, title, status, body, source_message_id, created_by, created_at)
-			VALUES (?, ?, ?, 'vigente', ?, ?, ?, ?)`,
-			decisionID, project.ID, title, body, nullable(sourceMessageID), actor.Participant.ID, timefmt.Format(now),
+			INSERT INTO decisions(id, project_id, title, status, body, source_message_id, created_by, created_by_role, created_at)
+			VALUES (?, ?, ?, 'vigente', ?, ?, ?, ?, ?)`,
+			decisionID, project.ID, title, body, nullable(sourceMessageID),
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear decisión: %w", err)
 		}
@@ -571,7 +579,10 @@ func (s *Service) CreateDecision(ctx context.Context, actor Identity, projectRef
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"decision_id": decisionID, "title": title, "status": "vigente"}, nil
+	return map[string]any{
+		"decision_id": decisionID, "title": title, "status": "vigente",
+		"created_by": actor.Participant.ID, "created_by_role": actor.Participant.AgentRole,
+	}, nil
 }
 
 // ListDecisions lista decisiones de un proyecto.
@@ -588,7 +599,8 @@ func (s *Service) ListDecisions(ctx context.Context, actor Identity, projectRef 
 		return nil, forbidden("requires_project_read", "sin permiso de lectura en el proyecto", project.ID, "decision.listar", project.ID)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, title, status, body, COALESCE(source_message_id, ''), COALESCE(created_by, ''), created_at
+		SELECT id, title, status, body, COALESCE(source_message_id, ''),
+		       COALESCE(created_by, ''), created_by_role, created_at
 		FROM decisions WHERE project_id = ? ORDER BY created_at DESC LIMIT 200`, project.ID)
 	if err != nil {
 		return nil, fmt.Errorf("listar decisiones: %w", err)
@@ -596,8 +608,8 @@ func (s *Service) ListDecisions(ctx context.Context, actor Identity, projectRef 
 	defer rows.Close()
 	items := make([]map[string]any, 0, 8)
 	for rows.Next() {
-		var decisionID, title, status, body, source, createdBy, createdAt string
-		if err := rows.Scan(&decisionID, &title, &status, &body, &source, &createdBy, &createdAt); err != nil {
+		var decisionID, title, status, body, source, createdBy, createdByRole, createdAt string
+		if err := rows.Scan(&decisionID, &title, &status, &body, &source, &createdBy, &createdByRole, &createdAt); err != nil {
 			return nil, fmt.Errorf("escanear decisión: %w", err)
 		}
 		parsed, err := timefmt.Parse(createdAt)
@@ -607,7 +619,8 @@ func (s *Service) ListDecisions(ctx context.Context, actor Identity, projectRef 
 		items = append(items, map[string]any{
 			"id": decisionID, "title": title, "status": status, "body": body,
 			"body_content":      domain.WrapForeign(body, "decision"),
-			"source_message_id": source, "created_by": createdBy, "created_at": parsed,
+			"source_message_id": source, "created_by": createdBy,
+			"created_by_role": createdByRole, "created_at": parsed,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -639,8 +652,9 @@ func (s *Service) AttachDocumentToTicket(ctx context.Context, actor Identity, ti
 	return s.withTx(ctx, func(tx *sql.Tx) error {
 		now := s.now().UTC()
 		if _, err := tx.ExecContext(ctx, `
-			INSERT OR IGNORE INTO ticket_documents(ticket_id, document_id, created_at)
-			VALUES (?, ?, ?)`, tc.Ticket.ID, doc.ID, timefmt.Format(now),
+			INSERT OR IGNORE INTO ticket_documents(ticket_id, document_id, created_by, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?)`, tc.Ticket.ID, doc.ID,
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("adjuntar documento: %w", err)
 		}
@@ -668,7 +682,7 @@ func (s *Service) ListTicketDocuments(ctx context.Context, actor Identity, ticke
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT d.id, COALESCE(d.project_id, ''), d.title, COALESCE(d.route, ''), d.type,
-		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_at, d.updated_at
+		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_by_role, d.created_at, d.updated_at
 		FROM ticket_documents td
 		JOIN documents d ON d.id = td.document_id
 		WHERE td.ticket_id = ? ORDER BY d.title`, tc.Ticket.ID)
@@ -895,15 +909,18 @@ func (s *Service) documentVersionView(ctx context.Context, q queryer, doc domain
 	var versionID, docCreatedBy, docCreatedAt, docUpdatedAt, versionCreatedAt string
 	if err := q.QueryRowContext(ctx, `
 		SELECT d.id, COALESCE(d.project_id, ''), d.title, COALESCE(d.route, ''), d.type,
-		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_at, d.updated_at,
-		       v.id, v.version, v.content, v.hash, v.author_participant_id, COALESCE(p.name, ''), v.created_at
+		       d.pinned, d.current_version, COALESCE(d.created_by, ''), d.created_by_role, d.created_at, d.updated_at,
+		       v.id, v.version, v.content, v.hash, v.author_participant_id,
+		       COALESCE(p.name, ''), v.author_role, v.created_at
 		FROM documents d
 		JOIN document_versions v ON v.document_id = d.id AND v.version = ?
 		LEFT JOIN participants p ON p.id = v.author_participant_id
 		WHERE d.id = ?`, version, doc.ID,
 	).Scan(&view.ID, &view.ProjectID, &view.Title, &view.Route, &view.Type,
-		&view.Pinned, &view.CurrentVersion, &docCreatedBy, &docCreatedAt, &docUpdatedAt,
-		&versionID, &view.Version, &view.Content, &view.Hash, &view.AuthorID, &view.AuthorName, &versionCreatedAt,
+		&view.Pinned, &view.CurrentVersion, &docCreatedBy, &view.CreatedByRole,
+		&docCreatedAt, &docUpdatedAt,
+		&versionID, &view.Version, &view.Content, &view.Hash, &view.AuthorID,
+		&view.AuthorName, &view.AuthorRole, &versionCreatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return DocumentView{}, notFound("document_version_not_found", "versión no encontrada")
@@ -931,7 +948,7 @@ func resolveDocument(ctx context.Context, q queryer, ref string) (domain.Documen
 	}
 	doc, err := scanDocument(q.QueryRowContext(ctx, `
 		SELECT id, COALESCE(project_id, ''), title, COALESCE(route, ''), type, pinned,
-		       current_version, COALESCE(created_by, ''), created_at, updated_at
+		       current_version, COALESCE(created_by, ''), created_by_role, created_at, updated_at
 		FROM documents WHERE id = ?`, ref))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Document{}, notFound("document_not_found", "documento no encontrado")
@@ -947,12 +964,12 @@ func documentByRoute(ctx context.Context, q queryer, projectID, route string) (d
 	var args []any
 	if projectID == "" {
 		query = `SELECT id, COALESCE(project_id, ''), title, COALESCE(route, ''), type, pinned,
-		                current_version, COALESCE(created_by, ''), created_at, updated_at
+		                current_version, COALESCE(created_by, ''), created_by_role, created_at, updated_at
 		         FROM documents WHERE project_id IS NULL AND route = ?`
 		args = []any{route}
 	} else {
 		query = `SELECT id, COALESCE(project_id, ''), title, COALESCE(route, ''), type, pinned,
-		                current_version, COALESCE(created_by, ''), created_at, updated_at
+		                current_version, COALESCE(created_by, ''), created_by_role, created_at, updated_at
 		         FROM documents WHERE project_id = ? AND route = ?`
 		args = []any{projectID, route}
 	}
@@ -978,7 +995,8 @@ func scanDocument(row interface{ Scan(...any) error }) (domain.Document, error) 
 	var pinned int
 	var createdAt, updatedAt string
 	if err := row.Scan(&doc.ID, &doc.ProjectID, &doc.Title, &doc.Route, &doc.Type,
-		&pinned, &doc.CurrentVersion, &doc.CreatedBy, &createdAt, &updatedAt); err != nil {
+		&pinned, &doc.CurrentVersion, &doc.CreatedBy, &doc.CreatedByRole,
+		&createdAt, &updatedAt); err != nil {
 		return domain.Document{}, err
 	}
 	doc.Pinned = pinned == 1

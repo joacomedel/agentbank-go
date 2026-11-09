@@ -66,8 +66,14 @@ func TestMCPInitializeListAndCall(t *testing.T) {
 	if len(tools) < 50 {
 		t.Fatalf("tools=%d, esperaba muchas más", len(tools))
 	}
-	if !strings.Contains(out.String(), `"ticket_next"`) || !strings.Contains(out.String(), `"changes"`) {
-		t.Fatal("faltan tools clave")
+	for _, name := range []string{
+		"ticket_next", "changes", "ticket_create", "ticket_edit",
+		"ticket_advance", "ticket_comment", "document_create",
+		"messages_send", "participant_update",
+	} {
+		if !strings.Contains(out.String(), `"`+name+`"`) {
+			t.Fatalf("falta la tool de escritura %q", name)
+		}
 	}
 	if !strings.Contains(out.String(), "API-1") || !strings.Contains(out.String(), "p1") {
 		t.Fatalf("respuestas de tools inesperadas: %s", out.String())

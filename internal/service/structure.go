@@ -33,18 +33,19 @@ type PhaseUpdate struct {
 
 // PhaseView es una fase con progreso y contenido opcional.
 type PhaseView struct {
-	ID          string        `json:"id"`
-	ProjectID   string        `json:"project_id"`
-	Key         string        `json:"key,omitempty"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	OrderIndex  int64         `json:"order_index"`
-	Status      string        `json:"status"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ClosedAt    *time.Time    `json:"closed_at,omitempty"`
-	Progress    PhaseProgress `json:"progress"`
-	Epics       []EpicView    `json:"epics,omitempty"`
-	Tickets     []TicketView  `json:"tickets,omitempty"`
+	ID            string        `json:"id"`
+	ProjectID     string        `json:"project_id"`
+	Key           string        `json:"key,omitempty"`
+	Name          string        `json:"name"`
+	Description   string        `json:"description"`
+	OrderIndex    int64         `json:"order_index"`
+	Status        string        `json:"status"`
+	CreatedByRole string        `json:"created_by_role,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	ClosedAt      *time.Time    `json:"closed_at,omitempty"`
+	Progress      PhaseProgress `json:"progress"`
+	Epics         []EpicView    `json:"epics,omitempty"`
+	Tickets       []TicketView  `json:"tickets,omitempty"`
 }
 
 // PhaseProgress cuenta tickets por estado efectivo en la fase.
@@ -77,17 +78,18 @@ type EpicUpdate struct {
 
 // EpicView es una épica con sus tickets.
 type EpicView struct {
-	ID          string       `json:"id"`
-	ProjectID   string       `json:"project_id"`
-	PhaseID     string       `json:"phase_id,omitempty"`
-	Key         string       `json:"key,omitempty"`
-	Title       string       `json:"title"`
-	Description string       `json:"description"`
-	OrderIndex  int64        `json:"order_index"`
-	Status      string       `json:"status"`
-	CreatedAt   time.Time    `json:"created_at"`
-	ClosedAt    *time.Time   `json:"closed_at,omitempty"`
-	Tickets     []TicketView `json:"tickets,omitempty"`
+	ID            string       `json:"id"`
+	ProjectID     string       `json:"project_id"`
+	PhaseID       string       `json:"phase_id,omitempty"`
+	Key           string       `json:"key,omitempty"`
+	Title         string       `json:"title"`
+	Description   string       `json:"description"`
+	OrderIndex    int64        `json:"order_index"`
+	Status        string       `json:"status"`
+	CreatedByRole string       `json:"created_by_role,omitempty"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ClosedAt      *time.Time   `json:"closed_at,omitempty"`
+	Tickets       []TicketView `json:"tickets,omitempty"`
 }
 
 // CreatePhase crea una fase.
@@ -126,13 +128,14 @@ func (s *Service) CreatePhase(ctx context.Context, actor Identity, projectRef st
 		phase := domain.Phase{
 			ID: id.New(), ProjectID: project.ID, Key: key, Name: name,
 			Description: input.Description, OrderIndex: order, Status: domain.PhaseOpen,
-			CreatedBy: actor.Participant.ID, CreatedAt: now,
+			CreatedBy: actor.Participant.ID, CreatedByRole: actor.Participant.AgentRole,
+			CreatedAt: now,
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO phases(id, project_id, key, name, description, order_index, status, created_by, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, 'abierta', ?, ?)`,
+			INSERT INTO phases(id, project_id, key, name, description, order_index, status, created_by, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, 'abierta', ?, ?, ?)`,
 			phase.ID, phase.ProjectID, nullable(phase.Key), phase.Name, phase.Description,
-			phase.OrderIndex, nullable(phase.CreatedBy), timefmt.Format(now),
+			phase.OrderIndex, nullable(phase.CreatedBy), phase.CreatedByRole, timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("phase_key_taken", "ya existe una fase con esa key")
@@ -171,7 +174,7 @@ func (s *Service) ListPhases(ctx context.Context, actor Identity, projectRef str
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, project_id, COALESCE(key, ''), name, description, order_index, status,
-		       COALESCE(created_by, ''), created_at, closed_at
+		       COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM phases WHERE project_id = ? ORDER BY order_index, name LIMIT 200`, project.ID)
 	if err != nil {
 		return nil, fmt.Errorf("listar fases: %w", err)
@@ -373,13 +376,15 @@ func (s *Service) CreateEpic(ctx context.Context, actor Identity, projectRef str
 		epic := domain.Epic{
 			ID: id.New(), ProjectID: project.ID, PhaseID: phaseID, Key: key, Title: title,
 			Description: input.Description, OrderIndex: order, Status: domain.PhaseOpen,
-			CreatedBy: actor.Participant.ID, CreatedAt: now,
+			CreatedBy: actor.Participant.ID, CreatedByRole: actor.Participant.AgentRole,
+			CreatedAt: now,
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO epics(id, project_id, phase_id, key, title, description, order_index, status, created_by, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, 'abierta', ?, ?)`,
+			INSERT INTO epics(id, project_id, phase_id, key, title, description, order_index, status, created_by, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 'abierta', ?, ?, ?)`,
 			epic.ID, epic.ProjectID, nullable(epic.PhaseID), nullable(epic.Key), epic.Title,
-			epic.Description, epic.OrderIndex, nullable(epic.CreatedBy), timefmt.Format(now),
+			epic.Description, epic.OrderIndex, nullable(epic.CreatedBy),
+			epic.CreatedByRole, timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("epic_key_taken", "ya existe una épica con esa key")
@@ -428,7 +433,7 @@ func (s *Service) ListEpics(ctx context.Context, actor Identity, projectRef, pha
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, project_id, COALESCE(phase_id, ''), COALESCE(key, ''), title, description,
-		       order_index, status, COALESCE(created_by, ''), created_at, closed_at
+		       order_index, status, COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM epics WHERE project_id = ?`+where+`
 		ORDER BY order_index, title LIMIT 200`, args...)
 	if err != nil {
@@ -662,7 +667,7 @@ func (s *Service) pendingTickets(ctx context.Context, q queryer, query string, i
 func (s *Service) listEpicsForPhase(ctx context.Context, project domain.Project, phaseID string) ([]EpicView, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, project_id, COALESCE(phase_id, ''), COALESCE(key, ''), title, description,
-		       order_index, status, COALESCE(created_by, ''), created_at, closed_at
+		       order_index, status, COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM epics WHERE project_id = ? AND phase_id = ? ORDER BY order_index, title`, project.ID, phaseID)
 	if err != nil {
 		return nil, fmt.Errorf("listar épicas de fase: %w", err)
@@ -687,7 +692,7 @@ func (s *Service) listPhaseLooseTickets(ctx context.Context, actor Identity, pro
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''),
 		       t.created_at, t.updated_at
 		FROM tickets t
 		WHERE t.phase_id = ? AND t.epic_id IS NULL
@@ -700,7 +705,7 @@ func (s *Service) listEpicTickets(ctx context.Context, actor Identity, project d
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE epic_id = ?
 		ORDER BY order_index, created_at`,
@@ -742,7 +747,7 @@ func resolvePhase(ctx context.Context, q queryer, projectID, ref string) (domain
 	}
 	phase, err := scanPhase(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(key, ''), name, description, order_index, status,
-		       COALESCE(created_by, ''), created_at, closed_at
+		       COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM phases WHERE project_id = ? AND (id = ? OR key = ?)
 		ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END LIMIT 1`,
 		projectID, ref, ref, ref))
@@ -758,7 +763,7 @@ func resolvePhase(ctx context.Context, q queryer, projectID, ref string) (domain
 func resolvePhaseWithProject(ctx context.Context, q queryer, ref string) (domain.Phase, domain.Project, error) {
 	phase, err := scanPhase(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(key, ''), name, description, order_index, status,
-		       COALESCE(created_by, ''), created_at, closed_at
+		       COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM phases WHERE id = ? OR key = ? LIMIT 1`, ref, ref))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Phase{}, domain.Project{}, notFound("phase_not_found", "fase no encontrada")
@@ -776,7 +781,7 @@ func resolvePhaseWithProject(ctx context.Context, q queryer, ref string) (domain
 func phaseByID(ctx context.Context, q queryer, phaseID string) (domain.Phase, error) {
 	phase, err := scanPhase(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(key, ''), name, description, order_index, status,
-		       COALESCE(created_by, ''), created_at, closed_at
+		       COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM phases WHERE id = ?`, phaseID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Phase{}, notFound("phase_not_found", "fase no encontrada")
@@ -794,7 +799,7 @@ func resolveEpic(ctx context.Context, q queryer, projectID, ref string) (domain.
 	}
 	epic, err := scanEpic(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(phase_id, ''), COALESCE(key, ''), title, description,
-		       order_index, status, COALESCE(created_by, ''), created_at, closed_at
+		       order_index, status, COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM epics WHERE project_id = ? AND (id = ? OR key = ?)
 		ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END LIMIT 1`,
 		projectID, ref, ref, ref))
@@ -810,7 +815,7 @@ func resolveEpic(ctx context.Context, q queryer, projectID, ref string) (domain.
 func resolveEpicWithProject(ctx context.Context, q queryer, ref string) (domain.Epic, domain.Project, error) {
 	epic, err := scanEpic(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(phase_id, ''), COALESCE(key, ''), title, description,
-		       order_index, status, COALESCE(created_by, ''), created_at, closed_at
+		       order_index, status, COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM epics WHERE id = ? OR key = ? LIMIT 1`, ref, ref))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Epic{}, domain.Project{}, notFound("epic_not_found", "épica no encontrada")
@@ -828,7 +833,7 @@ func resolveEpicWithProject(ctx context.Context, q queryer, ref string) (domain.
 func epicByID(ctx context.Context, q queryer, epicID string) (domain.Epic, error) {
 	epic, err := scanEpic(q.QueryRowContext(ctx, `
 		SELECT id, project_id, COALESCE(phase_id, ''), COALESCE(key, ''), title, description,
-		       order_index, status, COALESCE(created_by, ''), created_at, closed_at
+		       order_index, status, COALESCE(created_by, ''), created_by_role, created_at, closed_at
 		FROM epics WHERE id = ?`, epicID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Epic{}, notFound("epic_not_found", "épica no encontrada")
@@ -844,7 +849,8 @@ func scanPhase(row interface{ Scan(...any) error }) (domain.Phase, error) {
 	var createdAt string
 	var closedAt sql.NullString
 	if err := row.Scan(&phase.ID, &phase.ProjectID, &phase.Key, &phase.Name, &phase.Description,
-		&phase.OrderIndex, &phase.Status, &phase.CreatedBy, &createdAt, &closedAt); err != nil {
+		&phase.OrderIndex, &phase.Status, &phase.CreatedBy, &phase.CreatedByRole,
+		&createdAt, &closedAt); err != nil {
 		return domain.Phase{}, err
 	}
 	parsed, err := timefmt.Parse(createdAt)
@@ -861,7 +867,8 @@ func scanEpic(row interface{ Scan(...any) error }) (domain.Epic, error) {
 	var createdAt string
 	var closedAt sql.NullString
 	if err := row.Scan(&epic.ID, &epic.ProjectID, &epic.PhaseID, &epic.Key, &epic.Title,
-		&epic.Description, &epic.OrderIndex, &epic.Status, &epic.CreatedBy, &createdAt, &closedAt); err != nil {
+		&epic.Description, &epic.OrderIndex, &epic.Status, &epic.CreatedBy,
+		&epic.CreatedByRole, &createdAt, &closedAt); err != nil {
 		return domain.Epic{}, err
 	}
 	parsed, err := timefmt.Parse(createdAt)
@@ -877,7 +884,8 @@ func phaseView(phase domain.Phase, progress PhaseProgress) PhaseView {
 	return PhaseView{
 		ID: phase.ID, ProjectID: phase.ProjectID, Key: phase.Key, Name: phase.Name,
 		Description: phase.Description, OrderIndex: phase.OrderIndex, Status: phase.Status,
-		CreatedAt: phase.CreatedAt, ClosedAt: phase.ClosedAt, Progress: progress,
+		CreatedByRole: phase.CreatedByRole,
+		CreatedAt:     phase.CreatedAt, ClosedAt: phase.ClosedAt, Progress: progress,
 	}
 }
 
@@ -885,7 +893,8 @@ func epicView(epic domain.Epic) EpicView {
 	return EpicView{
 		ID: epic.ID, ProjectID: epic.ProjectID, PhaseID: epic.PhaseID, Key: epic.Key,
 		Title: epic.Title, Description: epic.Description, OrderIndex: epic.OrderIndex,
-		Status: epic.Status, CreatedAt: epic.CreatedAt, ClosedAt: epic.ClosedAt,
+		Status: epic.Status, CreatedByRole: epic.CreatedByRole,
+		CreatedAt: epic.CreatedAt, ClosedAt: epic.ClosedAt,
 	}
 }
 

@@ -71,7 +71,9 @@ Cerrá con `agentbank_ticket_advance`:
 
 ## Límites
 
-- No edites tickets que no reclamaste.
-- No cierres tickets de otra épica.
+- Podés comentar y editar cualquier ticket del proyecto; evitá pisar un ticket
+  con claim activo de otro carril sin dejar constancia.
+- Preferí cerrar los tickets de tu carril; si hace falta, podés cerrar otro
+  ticket con evidencia y comentario.
 - No cambies `assigned_role` ni `phase_id`/`epic_id` sin autorización.
 - No expongas tokens, secretos ni cuerpos sensibles en comentarios.

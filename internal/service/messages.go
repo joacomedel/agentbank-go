@@ -44,6 +44,7 @@ type MessageView struct {
 	ProjectID                string                `json:"project_id,omitempty"`
 	FromParticipantID        string                `json:"from_participant_id"`
 	FromName                 string                `json:"from_name"`
+	FromRole                 string                `json:"from_role,omitempty"`
 	Type                     string                `json:"type"`
 	DestinationType          string                `json:"destination_type"`
 	DestinationParticipantID string                `json:"destination_participant_id,omitempty"`
@@ -56,10 +57,12 @@ type MessageView struct {
 	AssumeDefaultAt          *time.Time            `json:"assume_default_at,omitempty"`
 	Resolution               string                `json:"resolution,omitempty"`
 	ResolvedBy               string                `json:"resolved_by,omitempty"`
+	ResolvedByRole           string                `json:"resolved_by_role,omitempty"`
 	ResolvedAt               *time.Time            `json:"resolved_at,omitempty"`
 	ResponseOption           *int                  `json:"response_option,omitempty"`
 	ResponseText             string                `json:"response_text,omitempty"`
 	TakenBy                  string                `json:"taken_by,omitempty"`
+	TakenByRole              string                `json:"taken_by_role,omitempty"`
 	TakenAt                  *time.Time            `json:"taken_at,omitempty"`
 	ReplyTo                  string                `json:"reply_to,omitempty"`
 	CorrelationID            string                `json:"correlation_id,omitempty"`
@@ -185,7 +188,8 @@ func (s *Service) CreateMessage(ctx context.Context, actor Identity, input Messa
 		now := s.now().UTC()
 		message := domain.Message{
 			ID: id.New(), ProjectID: projectID, FromParticipantID: actor.Participant.ID,
-			Type: messageType, DestinationType: destinationType,
+			FromRole: actor.Participant.AgentRole,
+			Type:     messageType, DestinationType: destinationType,
 			DestinationParticipantID: destinationParticipant, DestinationRole: destinationRole,
 			Subject: subject, Body: body, Options: options,
 			DefaultOption: defaultOption, AssumeDefaultAt: assumeDefaultAt,
@@ -217,11 +221,12 @@ func (s *Service) CreateMessage(ctx context.Context, actor Identity, input Messa
 		optionsJSON, _ := json.Marshal(options)
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO messages
-				(id, project_id, from_participant_id, type, destination_type,
+				(id, project_id, from_participant_id, from_role, type, destination_type,
 				 destination_participant_id, destination_role, subject, body, options,
 				 default_option, assume_default_at, reply_to, correlation_id, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			message.ID, nullable(message.ProjectID), message.FromParticipantID, message.Type,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			message.ID, nullable(message.ProjectID), message.FromParticipantID,
+			message.FromRole, message.Type,
 			message.DestinationType, nullable(message.DestinationParticipantID),
 			nullable(message.DestinationRole), message.Subject, message.Body, string(optionsJSON),
 			nullableInt(message.DefaultOption), nullableTime(message.AssumeDefaultAt),
@@ -350,12 +355,12 @@ func (s *Service) ListInbox(ctx context.Context, actor Identity, projectRef stri
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT m.id, COALESCE(m.project_id, ''), m.from_participant_id, m.type,
+		SELECT m.id, COALESCE(m.project_id, ''), m.from_participant_id, m.from_role, m.type,
 		       m.destination_type, COALESCE(m.destination_participant_id, ''),
 		       COALESCE(m.destination_role, ''), m.subject, m.body, m.options,
 		       m.default_option, m.assume_default_at, COALESCE(m.resolution, ''),
-		       COALESCE(m.resolved_by, ''), m.resolved_at, m.response_option,
-		       COALESCE(m.response_text, ''), COALESCE(m.taken_by, ''), m.taken_at,
+		       COALESCE(m.resolved_by, ''), m.resolved_by_role, m.resolved_at, m.response_option,
+		       COALESCE(m.response_text, ''), COALESCE(m.taken_by, ''), m.taken_by_role, m.taken_at,
 		       COALESCE(m.reply_to, ''), COALESCE(m.correlation_id, ''), m.created_at
 		FROM messages m
 		WHERE `+strings.Join(conditions, " AND ")+`
@@ -473,8 +478,10 @@ func (s *Service) TakeMessage(ctx context.Context, actor Identity, messageID str
 	now := s.now().UTC()
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE messages SET taken_by = ?, taken_at = ? WHERE id = ? AND (taken_by IS NULL OR taken_by = ?)`,
-			actor.Participant.ID, timefmt.Format(now), message.ID, actor.Participant.ID,
+			`UPDATE messages SET taken_by = ?, taken_by_role = ?, taken_at = ?
+			 WHERE id = ? AND (taken_by IS NULL OR taken_by = ?)`,
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
+			message.ID, actor.Participant.ID,
 		); err != nil {
 			return fmt.Errorf("tomar mensaje: %w", err)
 		}
@@ -523,11 +530,13 @@ func (s *Service) ResolveMessage(ctx context.Context, actor Identity, messageID 
 	now := s.now().UTC()
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `
-			UPDATE messages SET resolution = 'respondida', resolved_by = ?, resolved_at = ?,
-			                   response_option = ?, response_text = ?, taken_by = COALESCE(taken_by, ?)
+			UPDATE messages SET resolution = 'respondida', resolved_by = ?, resolved_by_role = ?,
+			                   resolved_at = ?, response_option = ?, response_text = ?,
+			                   taken_by = COALESCE(taken_by, ?), taken_by_role = COALESCE(taken_by_role, ?)
 			WHERE id = ?`,
-			actor.Participant.ID, timefmt.Format(now), nullableInt(option), nullable(resultText),
-			actor.Participant.ID, message.ID,
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
+			nullableInt(option), nullable(resultText), actor.Participant.ID,
+			actor.Participant.AgentRole, message.ID,
 		); err != nil {
 			return fmt.Errorf("resolver mensaje: %w", err)
 		}
@@ -564,8 +573,9 @@ func (s *Service) DiscardMessage(ctx context.Context, actor Identity, messageID 
 	now := s.now().UTC()
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE messages SET resolution = 'descartada', resolved_at = ? WHERE id = ?`,
-			timefmt.Format(now), message.ID,
+			`UPDATE messages SET resolution = 'descartada', resolved_by = ?, resolved_by_role = ?,
+			                   resolved_at = ? WHERE id = ?`,
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now), message.ID,
 		); err != nil {
 			return fmt.Errorf("descartar mensaje: %w", err)
 		}
@@ -675,9 +685,10 @@ func (s *Service) ConvertMessage(ctx context.Context, actor Identity, messageID,
 		decisionID := id.New()
 		err = s.withTx(ctx, func(tx *sql.Tx) error {
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO decisions(id, project_id, title, status, body, source_message_id, created_by, created_at)
-				VALUES (?, ?, ?, 'vigente', ?, ?, ?, ?)`,
-				decisionID, message.ProjectID, title, body, message.ID, actor.Participant.ID, timefmt.Format(now),
+				INSERT INTO decisions(id, project_id, title, status, body, source_message_id, created_by, created_by_role, created_at)
+				VALUES (?, ?, ?, 'vigente', ?, ?, ?, ?, ?)`,
+				decisionID, message.ProjectID, title, body, message.ID,
+				actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 			); err != nil {
 				return fmt.Errorf("crear decisión: %w", err)
 			}
@@ -711,10 +722,11 @@ func (s *Service) ConvertMessage(ctx context.Context, actor Identity, messageID,
 			ref = fmt.Sprintf("%s-%d", project.Prefix, number)
 			if _, err := tx.ExecContext(ctx, `
 				INSERT INTO tickets
-					(id, project_id, number, title, description, status, priority, created_by, created_by_role, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, 'abierto', 'media', ?, ?, ?, ?)`,
+					(id, project_id, number, title, description, status, priority, created_by, created_by_role, updated_by_role, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, 'abierto', 'media', ?, ?, ?, ?, ?)`,
 				ticketID, message.ProjectID, number, title, body, actor.Participant.ID,
-				actor.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
+				actor.Participant.AgentRole, actor.Participant.AgentRole,
+				timefmt.Format(now), timefmt.Format(now),
 			); err != nil {
 				return fmt.Errorf("crear ticket desde mensaje: %w", err)
 			}
@@ -769,14 +781,16 @@ func messageView(message domain.Message, fromName, state string) MessageView {
 	}
 	return MessageView{
 		ID: message.ID, ProjectID: message.ProjectID, FromParticipantID: message.FromParticipantID,
-		FromName: fromName, Type: message.Type, DestinationType: message.DestinationType,
+		FromName: fromName, FromRole: message.FromRole, Type: message.Type, DestinationType: message.DestinationType,
 		DestinationParticipantID: message.DestinationParticipantID, DestinationRole: message.DestinationRole,
 		Subject: message.Subject, Body: message.Body,
 		BodyContent: domain.WrapForeign(message.Body, "message"),
 		Options:     options, DefaultOption: message.DefaultOption, AssumeDefaultAt: message.AssumeDefaultAt,
-		Resolution: message.Resolution, ResolvedBy: message.ResolvedBy, ResolvedAt: message.ResolvedAt,
+		Resolution: message.Resolution, ResolvedBy: message.ResolvedBy,
+		ResolvedByRole: message.ResolvedByRole, ResolvedAt: message.ResolvedAt,
 		ResponseOption: message.ResponseOption, ResponseText: message.ResponseText,
-		TakenBy: message.TakenBy, TakenAt: message.TakenAt, ReplyTo: message.ReplyTo,
+		TakenBy: message.TakenBy, TakenByRole: message.TakenByRole,
+		TakenAt: message.TakenAt, ReplyTo: message.ReplyTo,
 		CorrelationID: message.CorrelationID, State: state, Pending: message.Resolution == "",
 		CreatedAt: message.CreatedAt,
 	}
@@ -847,11 +861,11 @@ func resolveMessage(ctx context.Context, q queryer, ref string) (domain.Message,
 		return domain.Message{}, notFound("message_not_found", "mensaje no encontrado")
 	}
 	message, err := scanMessage(q.QueryRowContext(ctx, `
-		SELECT id, COALESCE(project_id, ''), from_participant_id, type, destination_type,
+		SELECT id, COALESCE(project_id, ''), from_participant_id, from_role, type, destination_type,
 		       COALESCE(destination_participant_id, ''), COALESCE(destination_role, ''),
 		       subject, body, options, default_option, assume_default_at,
-		       COALESCE(resolution, ''), COALESCE(resolved_by, ''), resolved_at,
-		       response_option, COALESCE(response_text, ''), COALESCE(taken_by, ''),
+		       COALESCE(resolution, ''), COALESCE(resolved_by, ''), resolved_by_role, resolved_at,
+		       response_option, COALESCE(response_text, ''), COALESCE(taken_by, ''), taken_by_role,
 		       taken_at, COALESCE(reply_to, ''), COALESCE(correlation_id, ''), created_at
 		FROM messages WHERE id = ?`, ref))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -869,11 +883,12 @@ func scanMessage(row interface{ Scan(...any) error }) (domain.Message, error) {
 	var defaultOption, responseOption sql.NullInt64
 	var assumeDefaultAt, resolvedAt, takenAt sql.NullString
 	if err := row.Scan(
-		&message.ID, &message.ProjectID, &message.FromParticipantID, &message.Type,
+		&message.ID, &message.ProjectID, &message.FromParticipantID, &message.FromRole, &message.Type,
 		&message.DestinationType, &message.DestinationParticipantID, &message.DestinationRole,
 		&message.Subject, &message.Body, &options, &defaultOption, &assumeDefaultAt,
-		&message.Resolution, &message.ResolvedBy, &resolvedAt, &responseOption,
-		&message.ResponseText, &message.TakenBy, &takenAt, &message.ReplyTo,
+		&message.Resolution, &message.ResolvedBy, &message.ResolvedByRole, &resolvedAt,
+		&responseOption, &message.ResponseText, &message.TakenBy, &message.TakenByRole,
+		&takenAt, &message.ReplyTo,
 		&message.CorrelationID, &createdAt,
 	); err != nil {
 		return domain.Message{}, err
@@ -1029,12 +1044,12 @@ func (s *Service) createCorrectionTicketTx(ctx context.Context, tx *sql.Tx, acto
 	now := s.now().UTC()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO tickets
-			(id, project_id, number, title, description, status, priority, assignee_id, created_by, created_by_role, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, 'abierto', 'alta', ?, ?, ?, ?, ?)`,
+			(id, project_id, number, title, description, status, priority, assignee_id, created_by, created_by_role, updated_by_role, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 'abierto', 'alta', ?, ?, ?, ?, ?, ?)`,
 		ticketID, message.ProjectID, number, title,
 		"La respuesta difiere del default asumido para el mensaje "+message.ID,
 		message.FromParticipantID, actor.Participant.ID, actor.Participant.AgentRole,
-		timefmt.Format(now), timefmt.Format(now),
+		actor.Participant.AgentRole, timefmt.Format(now), timefmt.Format(now),
 	); err != nil {
 		return fmt.Errorf("crear ticket de corrección: %w", err)
 	}
@@ -1085,12 +1100,12 @@ func (s *Service) ListSentMessages(ctx context.Context, actor Identity, projectR
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT m.id, COALESCE(m.project_id, ''), m.from_participant_id, m.type,
+		SELECT m.id, COALESCE(m.project_id, ''), m.from_participant_id, m.from_role, m.type,
 		       m.destination_type, COALESCE(m.destination_participant_id, ''),
 		       COALESCE(m.destination_role, ''), m.subject, m.body, m.options,
 		       m.default_option, m.assume_default_at, COALESCE(m.resolution, ''),
-		       COALESCE(m.resolved_by, ''), m.resolved_at, m.response_option,
-		       COALESCE(m.response_text, ''), COALESCE(m.taken_by, ''), m.taken_at,
+		       COALESCE(m.resolved_by, ''), m.resolved_by_role, m.resolved_at, m.response_option,
+		       COALESCE(m.response_text, ''), COALESCE(m.taken_by, ''), m.taken_by_role, m.taken_at,
 		       COALESCE(m.reply_to, ''), COALESCE(m.correlation_id, ''), m.created_at
 		FROM messages m WHERE `+strings.Join(conditions, " AND ")+`
 		ORDER BY m.created_at DESC, m.id DESC LIMIT ?`, args...)

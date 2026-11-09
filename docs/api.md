@@ -136,6 +136,38 @@ Requiere admin de instancia. Pone `status='baja'` y revoca todos sus tokens.
 Actualiza actividad. El heartbeat también es implícito en cada request
 autenticado, con un máximo de una escritura por minuto.
 
+## Autoría y rol del actor
+
+Cada creación guarda el rol del agente en el momento de la acción. El rol sale
+de `participants.agent_role` asociado al token; nunca del body.
+
+| Objeto | Campo |
+|---|---|
+| Proyecto | `created_by`, `created_by_role` |
+| Participante | `created_by`, `created_by_role` |
+| Membresía | `granted_by`, `granted_by_role` |
+| Fase / épica | `created_by_role` |
+| Ticket | `created_by_role`, `updated_by_role` |
+| Comentario | `author_role` |
+| Claim / dependencia | `created_by_role` |
+| Mensaje | `from_role`, `resolved_by_role`, `taken_by_role` |
+| Documento | `created_by_role` |
+| Versión de documento | `author_role` |
+| Decisión / webhook | `created_by_role` |
+| Evento de auditoría | `actor_role`, `session_id` |
+
+`updated_by_role` en tickets se actualiza en cada edición, claim, liberación y
+avance. Cambiar el `agent_role` de un agente **no reescribe** los snapshots
+históricos.
+
+Para el historial completo de un objeto:
+
+```http
+GET /v1/audit?object_id=<id>&limit=200
+```
+
+Cada evento trae `actor_id`, `actor_role`, `session_id`, `action` y `payload`.
+
 ## Proyectos y membresías
 
 ### `POST /v1/projects`

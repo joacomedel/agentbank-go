@@ -47,6 +47,7 @@ type Ticket struct {
 	DiscoveredIn  string
 	CreatedBy     string
 	CreatedByRole string
+	UpdatedByRole string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
@@ -74,31 +75,33 @@ func PriorityRank(priority string) int {
 
 // Phase agrupa trabajo por proyecto.
 type Phase struct {
-	ID          string
-	ProjectID   string
-	Key         string
-	Name        string
-	Description string
-	OrderIndex  int64
-	Status      string
-	CreatedBy   string
-	CreatedAt   time.Time
-	ClosedAt    *time.Time
+	ID            string
+	ProjectID     string
+	Key           string
+	Name          string
+	Description   string
+	OrderIndex    int64
+	Status        string
+	CreatedBy     string
+	CreatedByRole string
+	CreatedAt     time.Time
+	ClosedAt      *time.Time
 }
 
 // Epic agrupa tickets dentro de una fase.
 type Epic struct {
-	ID          string
-	ProjectID   string
-	PhaseID     string
-	Key         string
-	Title       string
-	Description string
-	OrderIndex  int64
-	Status      string
-	CreatedBy   string
-	CreatedAt   time.Time
-	ClosedAt    *time.Time
+	ID            string
+	ProjectID     string
+	PhaseID       string
+	Key           string
+	Title         string
+	Description   string
+	OrderIndex    int64
+	Status        string
+	CreatedBy     string
+	CreatedByRole string
+	CreatedAt     time.Time
+	ClosedAt      *time.Time
 }
 
 // Claim es un lock con lease sobre un ticket.
@@ -110,6 +113,7 @@ type Claim struct {
 	StatusPrevious string
 	LeaseUntil     time.Time
 	LastActivityAt time.Time
+	CreatedByRole  string
 	CreatedAt      time.Time
 	ReleasedAt     *time.Time
 	Reason         string
@@ -117,12 +121,13 @@ type Claim struct {
 
 // Comment es una nota, comentario o cierre de ticket.
 type Comment struct {
-	ID        string
-	TicketID  string
-	AuthorID  string
-	Type      string
-	Body      string
-	CreatedAt time.Time
+	ID         string
+	TicketID   string
+	AuthorID   string
+	AuthorRole string
+	Type       string
+	Body       string
+	CreatedAt  time.Time
 }
 
 // Dependency es una arista "ticket depende de depends_on".

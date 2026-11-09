@@ -10,37 +10,43 @@ import (
 )
 
 type participantJSON struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	AgentRole string    `json:"agent_role,omitempty"`
-	Admin     bool      `json:"admin"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	Type          string    `json:"type"`
+	Name          string    `json:"name"`
+	Status        string    `json:"status"`
+	AgentRole     string    `json:"agent_role,omitempty"`
+	CreatedBy     string    `json:"created_by,omitempty"`
+	CreatedByRole string    `json:"created_by_role,omitempty"`
+	Admin         bool      `json:"admin"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 func toParticipant(participant domain.Participant) participantJSON {
 	return participantJSON{
-		ID:        participant.ID,
-		Type:      participant.Type,
-		Name:      participant.Name,
-		Status:    participant.Status,
-		AgentRole: participant.AgentRole,
-		Admin:     participant.Admin,
-		CreatedAt: participant.CreatedAt,
+		ID:            participant.ID,
+		Type:          participant.Type,
+		Name:          participant.Name,
+		Status:        participant.Status,
+		AgentRole:     participant.AgentRole,
+		CreatedBy:     participant.CreatedBy,
+		CreatedByRole: participant.CreatedByRole,
+		Admin:         participant.Admin,
+		CreatedAt:     participant.CreatedAt,
 	}
 }
 
 type projectJSON struct {
-	ID         string    `json:"id"`
-	Slug       string    `json:"slug"`
-	Name       string    `json:"name"`
-	Prefix     string    `json:"prefix"`
-	Version    int64     `json:"version"`
-	Permission string    `json:"permission,omitempty"`
-	Roles      []string  `json:"roles"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID            string    `json:"id"`
+	Slug          string    `json:"slug"`
+	Name          string    `json:"name"`
+	Prefix        string    `json:"prefix"`
+	Version       int64     `json:"version"`
+	Permission    string    `json:"permission,omitempty"`
+	Roles         []string  `json:"roles"`
+	CreatedBy     string    `json:"created_by,omitempty"`
+	CreatedByRole string    `json:"created_by_role,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func toProject(view service.ProjectView) projectJSON {
@@ -49,15 +55,17 @@ func toProject(view service.ProjectView) projectJSON {
 		roles = []string{}
 	}
 	return projectJSON{
-		ID:         view.Project.ID,
-		Slug:       view.Project.Slug,
-		Name:       view.Project.Name,
-		Prefix:     view.Project.Prefix,
-		Version:    view.Project.Version,
-		Permission: view.Permission,
-		Roles:      roles,
-		CreatedAt:  view.Project.CreatedAt,
-		UpdatedAt:  view.Project.UpdatedAt,
+		ID:            view.Project.ID,
+		Slug:          view.Project.Slug,
+		Name:          view.Project.Name,
+		Prefix:        view.Project.Prefix,
+		Version:       view.Project.Version,
+		Permission:    view.Permission,
+		Roles:         roles,
+		CreatedBy:     view.Project.CreatedBy,
+		CreatedByRole: view.Project.CreatedByRole,
+		CreatedAt:     view.Project.CreatedAt,
+		UpdatedAt:     view.Project.UpdatedAt,
 	}
 }
 
@@ -68,6 +76,8 @@ type memberJSON struct {
 	Admin         bool      `json:"admin"`
 	Permission    string    `json:"permission"`
 	Roles         []string  `json:"roles"`
+	GrantedBy     string    `json:"granted_by,omitempty"`
+	GrantedByRole string    `json:"granted_by_role,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -79,6 +89,8 @@ func toMember(member domain.Member) memberJSON {
 		Admin:         member.Admin,
 		Permission:    member.Permission,
 		Roles:         member.Roles,
+		GrantedBy:     member.GrantedBy,
+		GrantedByRole: member.GrantedByRole,
 		CreatedAt:     member.CreatedAt,
 	}
 }

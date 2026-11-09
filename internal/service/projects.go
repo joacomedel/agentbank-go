@@ -68,18 +68,22 @@ func (s *Service) CreateProject(ctx context.Context, actor Identity, input Proje
 			return err
 		}
 		view.Project = domain.Project{
-			ID:        id.New(),
-			Slug:      slug,
-			Name:      name,
-			Prefix:    finalPrefix,
-			Version:   1,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID:            id.New(),
+			Slug:          slug,
+			Name:          name,
+			Prefix:        finalPrefix,
+			Version:       1,
+			CreatedBy:     actor.Participant.ID,
+			CreatedByRole: actor.Participant.AgentRole,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO projects(id, slug, name, prefix, version, created_at, updated_at)
-			VALUES (?, ?, ?, ?, 1, ?, ?)`,
-			view.Project.ID, slug, name, finalPrefix, timefmt.Format(now), timefmt.Format(now),
+			INSERT INTO projects(id, slug, name, prefix, version, created_by, created_by_role, created_at, updated_at)
+			VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+			view.Project.ID, slug, name, finalPrefix,
+			view.Project.CreatedBy, view.Project.CreatedByRole,
+			timefmt.Format(now), timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				if strings.Contains(strings.ToLower(err.Error()), "projects.slug") {
@@ -98,9 +102,10 @@ func (s *Service) CreateProject(ctx context.Context, actor Identity, input Proje
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO memberships(participant_id, project_id, permission, roles, created_at)
-			VALUES (?, ?, 'admin', ?, ?)`,
-			actor.Participant.ID, view.Project.ID, rolesJSON, timefmt.Format(now),
+			INSERT INTO memberships(participant_id, project_id, permission, roles, granted_by, granted_by_role, created_at)
+			VALUES (?, ?, 'admin', ?, ?, ?, ?)`,
+			actor.Participant.ID, view.Project.ID, rolesJSON,
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear membresía del creador: %w", err)
 		}
@@ -170,7 +175,9 @@ func (s *Service) ListProjects(ctx context.Context, actor Identity, limit int, c
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.id, p.slug, p.name, p.prefix, p.version, p.created_at, p.updated_at,
+		SELECT p.id, p.slug, p.name, p.prefix, p.version,
+		       COALESCE(p.created_by, ''), p.created_by_role,
+		       p.created_at, p.updated_at,
 		       COALESCE(m.permission, ''), COALESCE(m.roles, '[]')
 		FROM projects p `+join+`
 		WHERE 1 = 1`+where+`
@@ -283,7 +290,8 @@ func (s *Service) UpdateProject(ctx context.Context, actor Identity, ref string,
 	var view ProjectView
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		current, err := scanProject(tx.QueryRowContext(ctx, `
-			SELECT id, slug, name, prefix, version, created_at, updated_at
+			SELECT id, slug, name, prefix, version, COALESCE(created_by, ''),
+			       created_by_role, created_at, updated_at
 			FROM projects WHERE id = ?`, project.ID))
 		if errors.Is(err, sql.ErrNoRows) {
 			return notFound("project_not_found", "proyecto no encontrado")
@@ -507,7 +515,8 @@ func (s *Service) ListMembers(ctx context.Context, actor Identity, ref string, l
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT p.id, p.name, p.type, p.admin, m.permission, m.roles, m.created_at
+		SELECT p.id, p.name, p.type, p.admin, m.permission, m.roles,
+		       COALESCE(m.granted_by, ''), m.granted_by_role, m.created_at
 		FROM memberships m
 		JOIN participants p ON p.id = m.participant_id
 		WHERE m.project_id = ?`+where+`
@@ -577,11 +586,13 @@ func (s *Service) SetMember(ctx context.Context, actor Identity, ref, participan
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO memberships(participant_id, project_id, permission, roles, created_at)
-			VALUES (?, ?, ?, ?, ?)
+			INSERT INTO memberships(participant_id, project_id, permission, roles, granted_by, granted_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(participant_id, project_id) DO UPDATE
-			  SET permission = excluded.permission, roles = excluded.roles`,
-			participantID, project.ID, permission, rolesJSON, timefmt.Format(now),
+			  SET permission = excluded.permission, roles = excluded.roles,
+			      granted_by = excluded.granted_by, granted_by_role = excluded.granted_by_role`,
+			participantID, project.ID, permission, rolesJSON,
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("guardar membresía: %w", err)
 		}
@@ -606,12 +617,12 @@ func (s *Service) SetMember(ctx context.Context, actor Identity, ref, participan
 		}); err != nil {
 			return err
 		}
-		var createdAt string
+		var createdAt, grantedBy string
 		if err := tx.QueryRowContext(ctx, `
-			SELECT created_at FROM memberships
+			SELECT COALESCE(granted_by, ''), granted_by_role, created_at FROM memberships
 			WHERE participant_id = ? AND project_id = ?`,
 			participantID, project.ID,
-		).Scan(&createdAt); err != nil {
+		).Scan(&grantedBy, &member.GrantedByRole, &createdAt); err != nil {
 			return fmt.Errorf("leer membresía guardada: %w", err)
 		}
 		parsedCreated, err := timefmt.Parse(createdAt)
@@ -625,6 +636,8 @@ func (s *Service) SetMember(ctx context.Context, actor Identity, ref, participan
 			Admin:         target.Admin,
 			Permission:    permission,
 			Roles:         roles,
+			GrantedBy:     grantedBy,
+			GrantedByRole: member.GrantedByRole,
 			CreatedAt:     parsedCreated,
 		}
 		return nil
@@ -693,7 +706,8 @@ func resolveProject(ctx context.Context, q queryer, ref string) (domain.Project,
 		return domain.Project{}, notFound("project_not_found", "proyecto no encontrado")
 	}
 	project, err := scanProject(q.QueryRowContext(ctx, `
-		SELECT id, slug, name, prefix, version, created_at, updated_at
+		SELECT id, slug, name, prefix, version, COALESCE(created_by, ''),
+		       created_by_role, created_at, updated_at
 		FROM projects
 		WHERE id = ? OR slug = ?
 		ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END
@@ -762,7 +776,8 @@ func scanProjectView(row interface{ Scan(...any) error }) (ProjectView, error) {
 	var view ProjectView
 	var createdAt, updatedAt, rolesJSON string
 	if err := row.Scan(&view.Project.ID, &view.Project.Slug, &view.Project.Name,
-		&view.Project.Prefix, &view.Project.Version, &createdAt, &updatedAt,
+		&view.Project.Prefix, &view.Project.Version, &view.Project.CreatedBy,
+		&view.Project.CreatedByRole, &createdAt, &updatedAt,
 		&view.Permission, &rolesJSON); err != nil {
 		return ProjectView{}, fmt.Errorf("escanear proyecto: %w", err)
 	}
@@ -790,7 +805,8 @@ func scanMember(row interface{ Scan(...any) error }) (domain.Member, error) {
 	var admin int
 	var rolesJSON, createdAt string
 	if err := row.Scan(&member.ParticipantID, &member.Name, &member.Type, &admin,
-		&member.Permission, &rolesJSON, &createdAt); err != nil {
+		&member.Permission, &rolesJSON, &member.GrantedBy,
+		&member.GrantedByRole, &createdAt); err != nil {
 		return domain.Member{}, fmt.Errorf("escanear miembro: %w", err)
 	}
 	member.Admin = admin == 1

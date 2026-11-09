@@ -79,6 +79,7 @@ type TicketView struct {
 	DiscoveredIn       string                `json:"discovered_in,omitempty"`
 	CreatedBy          string                `json:"created_by,omitempty"`
 	CreatedByRole      string                `json:"created_by_role,omitempty"`
+	UpdatedByRole      string                `json:"updated_by_role,omitempty"`
 	CreatedAt          time.Time             `json:"created_at"`
 	UpdatedAt          time.Time             `json:"updated_at"`
 	Dependencies       []DependencyView      `json:"dependencies,omitempty"`
@@ -89,11 +90,12 @@ type TicketView struct {
 
 // DependencyView es una arista resuelta para mostrar.
 type DependencyView struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
-	Ref       string `json:"ref"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
+	ID            string `json:"id"`
+	ProjectID     string `json:"project_id"`
+	Ref           string `json:"ref"`
+	Title         string `json:"title"`
+	Status        string `json:"status"`
+	CreatedByRole string `json:"created_by_role,omitempty"`
 }
 
 // ClaimView es un claim activo visible.
@@ -101,6 +103,7 @@ type ClaimView struct {
 	ID            string    `json:"id"`
 	ParticipantID string    `json:"participant_id"`
 	Name          string    `json:"name"`
+	CreatedByRole string    `json:"created_by_role,omitempty"`
 	LeaseUntil    time.Time `json:"lease_until"`
 	CreatedAt     time.Time `json:"created_at"`
 }
@@ -117,6 +120,7 @@ type CommentView struct {
 	TicketID    string                `json:"ticket_id"`
 	AuthorID    string                `json:"author_id"`
 	AuthorName  string                `json:"author_name"`
+	AuthorRole  string                `json:"author_role,omitempty"`
 	Type        string                `json:"type"`
 	Body        string                `json:"body"`
 	BodyContent domain.ForeignContent `json:"body_content"`
@@ -222,6 +226,7 @@ func (s *Service) CreateTicket(ctx context.Context, actor Identity, projectRef s
 			Paths:         paths,
 			CreatedBy:     actor.Participant.ID,
 			CreatedByRole: actor.Participant.AgentRole,
+			UpdatedByRole: actor.Participant.AgentRole,
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}
@@ -290,13 +295,14 @@ func (s *Service) CreateTicket(ctx context.Context, actor Identity, projectRef s
 			INSERT INTO tickets
 				(id, project_id, number, key, title, description, status, priority,
 				 assignee_id, assigned_role, phase_id, epic_id, order_index, version,
-				 paths, discovered_in, created_by, created_by_role, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+				 paths, discovered_in, created_by, created_by_role, updated_by_role, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
 			ticket.ID, ticket.ProjectID, ticket.Number, nullable(ticket.Key), ticket.Title,
 			ticket.Description, ticket.Status, ticket.Priority, nullable(ticket.AssigneeID),
 			nullable(ticket.AssignedRole), nullable(ticket.PhaseID), nullable(ticket.EpicID),
 			ticket.OrderIndex, mustJSON(ticket.Paths), nullable(ticket.DiscoveredIn),
-			nullable(ticket.CreatedBy), ticket.CreatedByRole, timefmt.Format(now), timefmt.Format(now),
+			nullable(ticket.CreatedBy), ticket.CreatedByRole, ticket.UpdatedByRole,
+			timefmt.Format(now), timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("ticket_key_taken", "ya existe un ticket con esa key")
@@ -305,9 +311,10 @@ func (s *Service) CreateTicket(ctx context.Context, actor Identity, projectRef s
 		}
 		for _, dep := range dependencies {
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO ticket_edges(ticket_id, depends_on_id, created_by, created_at)
-				VALUES (?, ?, ?, ?)`,
-				ticket.ID, dep.Ticket.ID, actor.Participant.ID, timefmt.Format(now),
+				INSERT INTO ticket_edges(ticket_id, depends_on_id, created_by, created_by_role, created_at)
+				VALUES (?, ?, ?, ?, ?)`,
+				ticket.ID, dep.Ticket.ID, actor.Participant.ID,
+				actor.Participant.AgentRole, timefmt.Format(now),
 			); err != nil {
 				return fmt.Errorf("crear dependencia: %w", err)
 			}
@@ -435,7 +442,7 @@ func (s *Service) ListTickets(ctx context.Context, actor Identity, projectRef st
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''),
 		       t.created_at, t.updated_at
 		FROM tickets t
 		LEFT JOIN epics e ON e.id = t.epic_id
@@ -633,12 +640,14 @@ func (s *Service) UpdateTicket(ctx context.Context, actor Identity, ref string, 
 			UPDATE tickets SET
 				title = ?, description = ?, status = ?, priority = ?,
 				assignee_id = ?, assigned_role = ?, phase_id = ?, epic_id = ?,
-				order_index = ?, version = ?, paths = ?, discovered_in = ?, updated_at = ?
+				order_index = ?, version = ?, paths = ?, discovered_in = ?,
+				updated_by_role = ?, updated_at = ?
 			WHERE id = ?`,
 			current.Title, current.Description, current.Status, current.Priority,
 			nullable(current.AssigneeID), nullable(current.AssignedRole), nullable(current.PhaseID),
 			nullable(current.EpicID), current.OrderIndex, current.Version, mustJSON(current.Paths),
-			nullable(current.DiscoveredIn), timefmt.Format(now), current.ID,
+			nullable(current.DiscoveredIn), actor.Participant.AgentRole,
+			timefmt.Format(now), current.ID,
 		); err != nil {
 			return fmt.Errorf("actualizar ticket: %w", err)
 		}
@@ -697,9 +706,10 @@ func (s *Service) AddDependency(ctx context.Context, actor Identity, ticketRef, 
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		now := s.now().UTC()
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO ticket_edges(ticket_id, depends_on_id, created_by, created_at)
-			VALUES (?, ?, ?, ?)`,
-			tc.Ticket.ID, dep.Ticket.ID, actor.Participant.ID, timefmt.Format(now),
+			INSERT INTO ticket_edges(ticket_id, depends_on_id, created_by, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?)`,
+			tc.Ticket.ID, dep.Ticket.ID, actor.Participant.ID,
+			actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("dependency_exists", "la dependencia ya existe")
@@ -812,18 +822,19 @@ func (s *Service) AddComment(ctx context.Context, actor Identity, ref, body, com
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		now := s.now().UTC()
 		comment := domain.Comment{
-			ID:        id.New(),
-			TicketID:  tc.Ticket.ID,
-			AuthorID:  actor.Participant.ID,
-			Type:      commentType,
-			Body:      body,
-			CreatedAt: now,
+			ID:         id.New(),
+			TicketID:   tc.Ticket.ID,
+			AuthorID:   actor.Participant.ID,
+			AuthorRole: actor.Participant.AgentRole,
+			Type:       commentType,
+			Body:       body,
+			CreatedAt:  now,
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO comments(id, ticket_id, author_participant_id, type, body, created_at)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			comment.ID, comment.TicketID, comment.AuthorID, comment.Type, comment.Body,
-			timefmt.Format(now),
+			INSERT INTO comments(id, ticket_id, author_participant_id, author_role, type, body, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			comment.ID, comment.TicketID, comment.AuthorID, actor.Participant.AgentRole,
+			comment.Type, comment.Body, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear comentario: %w", err)
 		}
@@ -851,7 +862,8 @@ func (s *Service) AddComment(ctx context.Context, actor Identity, ref, body, com
 		}
 		view = CommentView{
 			ID: comment.ID, TicketID: comment.TicketID, AuthorID: comment.AuthorID,
-			AuthorName: actor.Participant.Name, Type: comment.Type, Body: comment.Body,
+			AuthorName: actor.Participant.Name, AuthorRole: actor.Participant.AgentRole,
+			Type: comment.Type, Body: comment.Body,
 			BodyContent: domain.WrapForeign(comment.Body, "comment"), CreatedAt: comment.CreatedAt,
 		}
 		return nil
@@ -887,7 +899,8 @@ func (s *Service) ListComments(ctx context.Context, actor Identity, ref string, 
 	}
 	args = append(args, limit+1)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.ticket_id, c.author_participant_id, p.name, c.type, c.body, c.created_at
+		SELECT c.id, c.ticket_id, c.author_participant_id, p.name, c.author_role,
+		       c.type, c.body, c.created_at
 		FROM comments c
 		JOIN participants p ON p.id = c.author_participant_id
 		WHERE c.ticket_id = ?`+where+`
@@ -902,7 +915,7 @@ func (s *Service) ListComments(ctx context.Context, actor Identity, ref string, 
 		var view CommentView
 		var createdAt string
 		if err := rows.Scan(&view.ID, &view.TicketID, &view.AuthorID, &view.AuthorName,
-			&view.Type, &view.Body, &createdAt); err != nil {
+			&view.AuthorRole, &view.Type, &view.Body, &createdAt); err != nil {
 			return nil, "", fmt.Errorf("escanear comentario: %w", err)
 		}
 		parsed, err := timefmt.Parse(createdAt)
@@ -953,8 +966,9 @@ func (s *Service) Timeline(ctx context.Context, actor Identity, ref string, limi
 	for _, comment := range comments {
 		items = append(items, TimelineItem{
 			ID: comment.ID, Type: "comentario", AuthorID: comment.AuthorID,
-			AuthorName: comment.AuthorName, Body: comment.Body,
-			BodyContent: comment.BodyContent, CreatedAt: comment.CreatedAt,
+			AuthorName: comment.AuthorName, ActorRole: comment.AuthorRole,
+			Body: comment.Body, BodyContent: comment.BodyContent,
+			CreatedAt: comment.CreatedAt,
 		})
 	}
 	for _, event := range events {
@@ -1062,7 +1076,8 @@ func baseTicketView(ticket domain.Ticket, project domain.Project, effective stri
 		PhaseID: ticket.PhaseID, EpicID: ticket.EpicID, OrderIndex: ticket.OrderIndex,
 		Version: ticket.Version, Paths: paths, DiscoveredIn: ticket.DiscoveredIn,
 		CreatedBy: ticket.CreatedBy, CreatedByRole: ticket.CreatedByRole,
-		CreatedAt: ticket.CreatedAt, UpdatedAt: ticket.UpdatedAt,
+		UpdatedByRole: ticket.UpdatedByRole,
+		CreatedAt:     ticket.CreatedAt, UpdatedAt: ticket.UpdatedAt,
 	}
 }
 
@@ -1141,7 +1156,7 @@ func ticketByID(ctx context.Context, q queryer, ticketID string) (domain.Ticket,
 		SELECT id, project_id, number, COALESCE(key, ''), title, description,
 		       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 		       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
+		       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
 		       created_at, updated_at
 		FROM tickets WHERE id = ?`, ticketID))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -1167,7 +1182,7 @@ func resolveTicket(ctx context.Context, q queryer, ref string) (ticketContext, e
 			SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 			       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 			       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-			       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
+			       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''),
 			       t.created_at, t.updated_at
 			FROM tickets t
 			JOIN projects p ON p.id = t.project_id
@@ -1183,7 +1198,7 @@ func resolveTicket(ctx context.Context, q queryer, ref string) (ticketContext, e
 				SELECT id, project_id, number, COALESCE(key, ''), title, description,
 				       status, priority, COALESCE(assignee_id, ''), COALESCE(assigned_role, ''),
 				       COALESCE(phase_id, ''), COALESCE(epic_id, ''), order_index, version,
-				       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''),
+				       paths, COALESCE(discovered_in, ''), COALESCE(created_by, ''), COALESCE(created_by_role, ''), COALESCE(updated_by_role, ''),
 				       created_at, updated_at
 				FROM tickets WHERE key = ? LIMIT 2`, ref))
 		}
@@ -1209,7 +1224,7 @@ func scanTicket(row interface{ Scan(...any) error }) (domain.Ticket, error) {
 		&ticket.Description, &ticket.Status, &ticket.Priority, &ticket.AssigneeID,
 		&ticket.AssignedRole, &ticket.PhaseID, &ticket.EpicID, &ticket.OrderIndex,
 		&ticket.Version, &paths, &ticket.DiscoveredIn, &ticket.CreatedBy,
-		&ticket.CreatedByRole, &createdAt, &updatedAt,
+		&ticket.CreatedByRole, &ticket.UpdatedByRole, &createdAt, &updatedAt,
 	); err != nil {
 		return domain.Ticket{}, err
 	}
@@ -1236,7 +1251,7 @@ func loadDependencies(ctx context.Context, q queryer, ticketID, direction string
 	var query string
 	if direction == "out" {
 		query = `
-			SELECT t.id, t.project_id, p.prefix, t.number, t.title, t.status
+			SELECT t.id, t.project_id, p.prefix, t.number, t.title, t.status, e.created_by_role
 			FROM ticket_edges e
 			JOIN tickets t ON t.id = e.depends_on_id
 			JOIN projects p ON p.id = t.project_id
@@ -1244,7 +1259,7 @@ func loadDependencies(ctx context.Context, q queryer, ticketID, direction string
 			ORDER BY p.prefix, t.number`
 	} else {
 		query = `
-			SELECT t.id, t.project_id, p.prefix, t.number, t.title, t.status
+			SELECT t.id, t.project_id, p.prefix, t.number, t.title, t.status, e.created_by_role
 			FROM ticket_edges e
 			JOIN tickets t ON t.id = e.ticket_id
 			JOIN projects p ON p.id = t.project_id
@@ -1261,7 +1276,8 @@ func loadDependencies(ctx context.Context, q queryer, ticketID, direction string
 		var item DependencyView
 		var prefix string
 		var number int64
-		if err := rows.Scan(&item.ID, &item.ProjectID, &prefix, &number, &item.Title, &item.Status); err != nil {
+		if err := rows.Scan(&item.ID, &item.ProjectID, &prefix, &number, &item.Title,
+			&item.Status, &item.CreatedByRole); err != nil {
 			return nil, fmt.Errorf("escanear dependencia: %w", err)
 		}
 		item.Ref = fmt.Sprintf("%s-%d", prefix, number)
@@ -1275,7 +1291,7 @@ func loadDependencies(ctx context.Context, q queryer, ticketID, direction string
 
 func loadActiveClaims(ctx context.Context, q queryer, ticketID string) ([]ClaimView, error) {
 	rows, err := q.QueryContext(ctx, `
-		SELECT c.id, c.participant_id, p.name, c.lease_until, c.created_at
+		SELECT c.id, c.participant_id, p.name, c.created_by_role, c.lease_until, c.created_at
 		FROM claims c
 		JOIN participants p ON p.id = c.participant_id
 		WHERE c.ticket_id = ? AND c.released_at IS NULL
@@ -1288,7 +1304,8 @@ func loadActiveClaims(ctx context.Context, q queryer, ticketID string) ([]ClaimV
 	for rows.Next() {
 		var item ClaimView
 		var lease, created string
-		if err := rows.Scan(&item.ID, &item.ParticipantID, &item.Name, &lease, &created); err != nil {
+		if err := rows.Scan(&item.ID, &item.ParticipantID, &item.Name,
+			&item.CreatedByRole, &lease, &created); err != nil {
 			return nil, fmt.Errorf("escanear claim: %w", err)
 		}
 		parsedLease, err := timefmt.Parse(lease)
@@ -1370,7 +1387,9 @@ func ticketAuditPayload(ticket domain.Ticket) map[string]any {
 		"order_index":     ticket.OrderIndex,
 		"version":         ticket.Version,
 		"paths":           ticket.Paths,
+		"created_by":      ticket.CreatedBy,
 		"created_by_role": ticket.CreatedByRole,
+		"updated_by_role": ticket.UpdatedByRole,
 	}
 }
 

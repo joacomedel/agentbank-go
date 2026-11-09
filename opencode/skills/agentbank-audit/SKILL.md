@@ -113,7 +113,10 @@ Al final: cuántos aprobados, cuántos rechazados, y el próximo paso.
 
 ## Límites
 
-- No edites código ni tickets.
-- No cierres tickets como `hecho`.
+- No edites código de implementación.
+- Sí podés escribir tickets con MCP: comentar, editar, reabrir, crear
+  seguimiento y cerrar con evidencia.
+- Preferí aprobar con comentario; cerrar es una acción válida si el flujo lo
+  pide.
 - No confíes en la nota: verificá el repo.
 - Si auditás tu propio trabajo, dejalo asentado.

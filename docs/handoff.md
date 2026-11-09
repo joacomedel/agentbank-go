@@ -9,10 +9,14 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
 - Backend Go + SQLite, sin UI de producto.
 - Etapas **0–7 implementadas**: identidad/auditoría, tickets/cola, fases/épicas,
   mensajes, documentos, operación/hardening, CLI/MCP/worker básico.
-- **56 tests** verdes.
+- **57 tests** verdes.
 - `main` incluye OpenAPI/Swagger, feed incremental `/v1/changes`, CLI y MCP de
-  75 tools sin perfiles, tokens por agente, `agent_role` y subagentes de
-  OpenCode (orquestador/implementador/auditor).
+  75 tools sin perfiles, tokens por agente, `agent_role`, snapshots de rol en
+  cada creación y subagentes de OpenCode (orquestador/implementador/auditor).
+- Migración `0009_actor_roles_everywhere.sql` verificada sobre una base creada
+  con el binario anterior (0008): agrega columnas y rellena `created_by_role`
+  de tickets, comentarios, fases y documentos desde `participants.agent_role`.
+  Las filas sin rol reconstruible quedan con `''`.
 - Pendiente: ejecutor `opencode-server`/worktrees del worker, Telegram,
   contratos entre proyectos, bloqueos/escalado y choque de áreas.
 - La UI se construye **fuera de este repo** contra OpenAPI.
@@ -126,7 +130,9 @@ estaban en `ListTickets`, `ListPhases` y `listTicketsByQuery`.
   falta el token del agente.
 - `agent_role` es la etiqueta funcional (`orquestador`, `auditor`, `backend`):
   se guarda en `participants.agent_role`, se snapshotea en
-  `tickets.created_by_role` y se registra en `audit_events.actor_role`.
+  `created_by_role`/`author_role` de cada entidad y se registra en
+  `audit_events.actor_role`. El ticket además guarda `updated_by_role`.
+  El historial de un objeto se consulta con `GET /v1/audit?object_id=<id>`.
 - CLI: `agentbank <comando>`; `agentbank login`, `agentbank init`,
   `agentbank agent list|ensure|rotate|revoke|disable`.
 - MCP: `agentbank mcp`, JSON-RPC por stdio, 75 tools sin perfiles.

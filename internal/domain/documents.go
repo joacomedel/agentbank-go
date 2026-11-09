@@ -17,6 +17,7 @@ type Document struct {
 	Pinned         bool
 	CurrentVersion int64
 	CreatedBy      string
+	CreatedByRole  string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

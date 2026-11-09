@@ -138,11 +138,12 @@ func (s *Service) TicketNext(ctx context.Context, actor Identity, input TicketNe
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO claims(id, ticket_id, participant_id, session_id, status_previo,
-			                   lease_until, last_activity_at, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			                   lease_until, last_activity_at, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			claim.ID, claim.TicketID, claim.ParticipantID, nullable(claim.SessionID),
 			claim.StatusPrevious, timefmt.Format(claim.LeaseUntil),
-			timefmt.Format(claim.LastActivityAt), timefmt.Format(claim.CreatedAt),
+			timefmt.Format(claim.LastActivityAt), actor.Participant.AgentRole,
+			timefmt.Format(claim.CreatedAt),
 		); err != nil {
 			if isUniqueConstraint(err) {
 				return conflict("claim_conflict", "el ticket ya tiene un claim activo")
@@ -153,8 +154,9 @@ func (s *Service) TicketNext(ctx context.Context, actor Identity, input TicketNe
 		selected.Ticket.Version++
 		selected.Ticket.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE tickets SET status = ?, version = ?, updated_at = ? WHERE id = ?`,
-			selected.Ticket.Status, selected.Ticket.Version, timefmt.Format(now), selected.Ticket.ID,
+			`UPDATE tickets SET status = ?, version = ?, updated_by_role = ?, updated_at = ? WHERE id = ?`,
+			selected.Ticket.Status, selected.Ticket.Version, actor.Participant.AgentRole,
+			timefmt.Format(now), selected.Ticket.ID,
 		); err != nil {
 			return fmt.Errorf("marcar ticket en curso: %w", err)
 		}
@@ -312,7 +314,7 @@ func candidateQuery(projectIDs []string, actor Identity, rights domain.Rights, i
 		SELECT t.id, t.project_id, t.number, COALESCE(t.key, ''), t.title, t.description,
 		       t.status, t.priority, COALESCE(t.assignee_id, ''), COALESCE(t.assigned_role, ''),
 		       COALESCE(t.phase_id, ''), COALESCE(t.epic_id, ''), t.order_index, t.version,
-		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''),
+		       t.paths, COALESCE(t.discovered_in, ''), COALESCE(t.created_by, ''), COALESCE(t.created_by_role, ''), COALESCE(t.updated_by_role, ''),
 		       t.created_at, t.updated_at, pr.prefix
 		FROM tickets t
 		JOIN projects pr ON pr.id = t.project_id
@@ -372,7 +374,7 @@ func scanTicketWithPrefix(row interface{ Scan(...any) error }) (domain.Ticket, s
 		&ticket.Description, &ticket.Status, &ticket.Priority, &ticket.AssigneeID,
 		&ticket.AssignedRole, &ticket.PhaseID, &ticket.EpicID, &ticket.OrderIndex,
 		&ticket.Version, &paths, &ticket.DiscoveredIn, &ticket.CreatedBy,
-		&ticket.CreatedByRole, &createdAt, &updatedAt, &prefix,
+		&ticket.CreatedByRole, &ticket.UpdatedByRole, &createdAt, &updatedAt, &prefix,
 	); err != nil {
 		return domain.Ticket{}, "", err
 	}

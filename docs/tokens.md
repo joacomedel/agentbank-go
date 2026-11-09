@@ -62,11 +62,17 @@ El script hace `login`, `agent ensure` y escribe la entrada MCP en
 Se guarda en:
 
 - `participants.agent_role`;
-- el snapshot `tickets.created_by_role` al crear un ticket;
-- `audit_events.actor_role` en cada evento.
+- el snapshot `created_by_role` (o `author_role`, `from_role`,
+  `granted_by_role`) de cada creación;
+- `tickets.updated_by_role` en cada edición/claim/avance;
+- `audit_events.actor_role` y `session_id` en cada evento.
 
 Así podés saber si un ticket lo creó el auditor, el orquestador o un worker,
-incluso si después el agente cambia de rol.
+incluso si después el agente cambia de rol. El mismo snapshot se guarda en
+proyectos, fases, épicas, comentarios, mensajes, documentos, versiones,
+decisiones, webhooks y claims. Cada cambio individual, además, queda en
+`audit_events.actor_role`; el historial de un objeto se consulta con
+`GET /v1/audit?object_id=<id>`.
 
 ## Comandos
 
@@ -122,6 +128,8 @@ Config de OpenCode:
 ```
 
 - El MCP no recibe el token humano.
+- El MCP puede leer y escribir: crear/editar/cerrar tickets, comentar, mensajes
+  y documentos. El rol no limita las tools MCP.
 - Si `tokens/opencode-main.token` no existe, el primer arranque lo crea con
   `human.token`.
 - Para otro agente, usá otro `AGENTBANK_AGENT` en su configuración.

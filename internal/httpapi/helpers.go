@@ -44,7 +44,7 @@ func (s *Server) authenticated(next authedHandler) http.Handler {
 		}
 		sessionID, err := s.svc.OpenSession(r.Context(), identity, r.Header.Get("X-Session-Id"), originOf(r))
 		if errors.Is(err, service.ErrInvalidSession) {
-			s.auditRejection(r, audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID, SessionID: identity.SessionID, Origin: originOf(r)}, "rechazo.auth.sesion_invalida", "la sesión no pertenece al participante", "", "")
+			s.auditRejection(r, audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID, Role: identity.Participant.AgentRole, SessionID: identity.SessionID, Origin: originOf(r)}, "rechazo.auth.sesion_invalida", "la sesión no pertenece al participante", "", "")
 			s.writeError(w, http.StatusUnauthorized, "invalid_session", "sesión inválida")
 			return
 		}
@@ -54,7 +54,7 @@ func (s *Server) authenticated(next authedHandler) http.Handler {
 			return
 		}
 		if !s.limiter.Allow(identity.Participant.ID) {
-			s.auditRejection(r, audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID, SessionID: identity.SessionID, Origin: originOf(r)}, "rechazo.rate_limit", "límite de requests alcanzado", "", "")
+			s.auditRejection(r, audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID, Role: identity.Participant.AgentRole, SessionID: identity.SessionID, Origin: originOf(r)}, "rechazo.rate_limit", "límite de requests alcanzado", "", "")
 			w.Header().Set("Retry-After", "60")
 			s.writeError(w, http.StatusTooManyRequests, "rate_limited", "demasiados requests")
 			return
@@ -182,7 +182,7 @@ func (s *Server) respondError(w http.ResponseWriter, r *http.Request, identity s
 			reason = forbidden.Action + ": " + reason
 		}
 		if auditErr := s.svc.AuditRejection(ctx,
-			audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID, SessionID: identity.SessionID, Origin: originOf(r)},
+			audit.Actor{Type: identity.Participant.Type, ID: identity.Participant.ID, Role: identity.Participant.AgentRole, SessionID: identity.SessionID, Origin: originOf(r)},
 			"rechazo.permiso", reason, originOf(r), forbidden.ProjectID, "permiso", forbidden.ObjectID,
 		); auditErr != nil {
 			s.log.Error("auditar permiso rechazado", "err", auditErr)

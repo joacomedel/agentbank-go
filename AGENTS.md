@@ -142,8 +142,10 @@ documentarlo en `docs/api.md` como diferencia.
   `~/.config/agentbank/tokens/<agente>.token` y se auto-enrola con el humano.
   Cada token tiene su identidad: no se comparten entre agentes.
 - `participants.agent_role` etiqueta el rol funcional (`orquestador`, `auditor`,
-  `backend`, etc.); se snapshotea en `tickets.created_by_role` y en
-  `audit_events.actor_role`.
+  `backend`, etc.); se snapshotea en `created_by_role`/`author_role` de cada
+  entidad y en `audit_events.actor_role`. El ticket además guarda
+  `updated_by_role`. El historial completo de un objeto se consulta en
+  `GET /v1/audit?object_id=…`.
 - Rate limit simple en memoria por token/IP; bloqueo temporal tras fallos.
 - Validación estricta de JSON (`DisallowUnknownFields`), límites de tamaño y
   listas.

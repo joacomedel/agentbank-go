@@ -29,12 +29,13 @@ type WebhookInput struct {
 
 // WebhookView es un webhook registrado.
 type WebhookView struct {
-	ID        string    `json:"id"`
-	ProjectID string    `json:"project_id"`
-	URL       string    `json:"url"`
-	Events    []string  `json:"events"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	ProjectID     string    `json:"project_id"`
+	URL           string    `json:"url"`
+	Events        []string  `json:"events"`
+	Active        bool      `json:"active"`
+	CreatedByRole string    `json:"created_by_role,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // OutboxItem es una entrega pendiente o histórica.
@@ -78,10 +79,10 @@ func (s *Service) CreateWebhook(ctx context.Context, actor Identity, projectRef 
 	webhookID := id.New()
 	err = s.withTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO webhooks(id, project_id, url, secret, events, active, created_by, created_at)
-			VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+			INSERT INTO webhooks(id, project_id, url, secret, events, active, created_by, created_by_role, created_at)
+			VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
 			webhookID, project.ID, rawURL, nullable(input.Secret), string(eventsJSON),
-			actor.Participant.ID, timefmt.Format(now),
+			actor.Participant.ID, actor.Participant.AgentRole, timefmt.Format(now),
 		); err != nil {
 			return fmt.Errorf("crear webhook: %w", err)
 		}
@@ -96,7 +97,10 @@ func (s *Service) CreateWebhook(ctx context.Context, actor Identity, projectRef 
 	if err != nil {
 		return WebhookView{}, err
 	}
-	return WebhookView{ID: webhookID, ProjectID: project.ID, URL: rawURL, Events: events, Active: true, CreatedAt: now}, nil
+	return WebhookView{
+		ID: webhookID, ProjectID: project.ID, URL: rawURL, Events: events, Active: true,
+		CreatedByRole: actor.Participant.AgentRole, CreatedAt: now,
+	}, nil
 }
 
 // ListWebhooks lista webhooks de un proyecto.
@@ -113,7 +117,7 @@ func (s *Service) ListWebhooks(ctx context.Context, actor Identity, projectRef s
 		return nil, forbidden("requires_project_read", "sin permiso de lectura en el proyecto", project.ID, "webhook.listar", project.ID)
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, project_id, url, events, active, created_at
+		SELECT id, project_id, url, events, active, created_by_role, created_at
 		FROM webhooks WHERE project_id = ? ORDER BY created_at DESC`, project.ID)
 	if err != nil {
 		return nil, fmt.Errorf("listar webhooks: %w", err)
@@ -124,7 +128,8 @@ func (s *Service) ListWebhooks(ctx context.Context, actor Identity, projectRef s
 		var item WebhookView
 		var events, createdAt string
 		var active int
-		if err := rows.Scan(&item.ID, &item.ProjectID, &item.URL, &events, &active, &createdAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.ProjectID, &item.URL, &events, &active,
+			&item.CreatedByRole, &createdAt); err != nil {
 			return nil, fmt.Errorf("escanear webhook: %w", err)
 		}
 		item.Active = active == 1

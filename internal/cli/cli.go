@@ -980,13 +980,26 @@ func runAudit(ctx context.Context, cfg Config, args []string, stdout, stderr io.
 		fs := flag.NewFlagSet("audit list", flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		chain := fs.String("chain", "", "chain_id")
+		actorID := fs.String("actor-id", "", "participante")
+		action := fs.String("action", "", "acción")
+		objectType := fs.String("object-type", "", "tipo de objeto")
+		objectID := fs.String("object-id", "", "id del objeto")
+		projectID := fs.String("project-id", "", "proyecto")
+		from := fs.String("from", "", "desde RFC3339")
+		to := fs.String("to", "", "hasta RFC3339")
 		limit := fs.Int("limit", 50, "máximo")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
 		query := url.Values{}
-		if *chain != "" {
-			query.Set("chain_id", *chain)
+		for key, value := range map[string]string{
+			"chain_id": *chain, "actor_id": *actorID, "action": *action,
+			"object_type": *objectType, "object_id": *objectID,
+			"project_id": *projectID, "from": *from, "to": *to,
+		} {
+			if value != "" {
+				query.Set(key, value)
+			}
 		}
 		query.Set("limit", fmt.Sprint(*limit))
 		result, err := newClient(cfg).Do(ctx, "GET", "/v1/audit", query, nil, nil)
