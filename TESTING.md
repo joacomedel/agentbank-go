@@ -7,6 +7,7 @@ Este archivo solo agrega lo específico del proyecto.
 El playbook de sesión nueva está en `docs/handoff.md`.
 
 Smoke de tokens/agent_role: `./scripts/smoke_agent_tokens.py`.
+Smoke del flujo de revisión (HTTP + CLI + MCP): `./scripts/smoke_review.py`.
 
 ## Matriz
 

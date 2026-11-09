@@ -25,6 +25,10 @@ explique la sesión anterior**. Si vas a tocar AgentBank Go, leé esto después 
   `ticket_next(status="en revisión")`.
 - La fase `hardening-flujo` quedó cargada con 7 épicas y 24 tickets. E1 está
   implementada; E2–E7 quedan planificadas.
+- **Verificación E1 (2026-11-09):** `scripts/smoke_review.py` pasó 20/20
+  checks sobre base temporal (HTTP, CLI y MCP), incluidos evidencia inválida,
+  dependencias, reaperturas, escalado y `requiere_revision=false`. Los tests
+  nuevos se corrieron 10 veces sin flakiness.
 - Pendiente: Épicas 2–7 del hardening (claims robustos, idempotencia,
   identidad/roles, worktrees, contexto/permisos, docs), ejecutor
   `opencode-server`, Telegram, contratos entre proyectos, bloqueos/escalado y
